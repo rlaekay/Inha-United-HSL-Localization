@@ -1686,13 +1686,13 @@ void Brain::odometerCallback(const booster_interface::msg::Odometer &msg) {
   //     color = 0x00CC00FF;
   //   string label = format("Cost: %.1f", data->tmMyCost);
   //   log->logRobot("field/robot", data->robotPoseToField, color, label, true);
-  // }
-  // void Brain::lowStateCallback(const booster_interface::msg::LowState &msg) {
-  //   data->headYaw = msg.motor_state_serial[0].q;
-  //   data->headPitch = msg.motor_state_serial[1].q;
-  //   log->log("debug/head_angles",
-  //            rerun::TextLog(format("pitch: %.1f, yaw: %.1f", data->headYaw,
-  //                                  data->headPitch)));
+}
+void Brain::lowStateCallback(const booster_interface::msg::LowState &msg) {
+  data->headYaw = msg.motor_state_serial[0].q;
+  data->headPitch = msg.motor_state_serial[1].q;
+  log->log("debug/head_angles",
+           rerun::TextLog(format("pitch: %.1f, yaw: %.1f", data->headYaw,
+                                 data->headPitch)));
 }
 
 void Brain::imageCallback(const sensor_msgs::msg::Image &msg) {
@@ -2552,754 +2552,762 @@ void Brain::logDetection(const vector<GameObject> &gameObjects,
 //   // );
 // }
 
-// void Brain::logObstacles() {
-//   // log->setTimeNow();
-//   // time is set on the outside
+void Brain::logObstacles() {
+  // log->setTimeNow();
+  // time is set on the outside
 
-//   // 记录障碍物(即有被占用的网格)
-//   auto obs = data->getObstacles();
-//   vector<rerun::Vec2D> points;
-//   vector<rerun::Color> colors;
-//   vector<rerun::Text> labels;
-//   const int occThreshold =
-//       get_parameter("obstacle_avoidance.occupancy_threshold").as_int();
-//   for (int i = 0; i < obs.size(); i++) {
-//     auto o = obs[i];
+  // 记录障碍物(即有被占用的网格)
+  auto obs = data->getObstacles();
+  vector<rerun::Vec2D> points;
+  vector<rerun::Color> colors;
+  vector<rerun::Text> labels;
+  const int occThreshold =
+      get_parameter("obstacle_avoidance.occupancy_threshold").as_int();
+  for (int i = 0; i < obs.size(); i++) {
+    auto o = obs[i];
 
-//     if (o.confidence < occThreshold)
-//       continue; // 这个逻辑覆盖了后面的逻辑, 注掉可以以不同颜色 log
-//                 // 不同的置信度.
+    if (o.confidence < occThreshold)
+      continue; // 这个逻辑覆盖了后面的逻辑, 注掉可以以不同颜色 log
+                // 不同的置信度.
 
-//     points.push_back(rerun::Vec2D{o.posToField.x, -o.posToField.y});
-//     double mem_msecs =
-//         get_parameter("obstacle_avoidance.obstacle_memory_msecs").as_double();
-//     auto age = msecsSince(o.timePoint);
-//     uint8_t alpha = static_cast<uint8_t>(0xFF - 0xFF * age / mem_msecs);
-//     uint32_t color = (o.confidence > occThreshold) ? (0xFF000000 | alpha)
-//                                                    : (0xFFFF0000 | alpha);
-//     colors.push_back(rerun::Color(color));
+    points.push_back(rerun::Vec2D{o.posToField.x, -o.posToField.y});
+    double mem_msecs =
+        get_parameter("obstacle_avoidance.obstacle_memory_msecs").as_double();
+    auto age = msecsSince(o.timePoint);
+    uint8_t alpha = static_cast<uint8_t>(0xFF - 0xFF * age / mem_msecs);
+    uint32_t color = (o.confidence > occThreshold) ? (0xFF000000 | alpha)
+                                                   : (0xFFFF0000 | alpha);
+    colors.push_back(rerun::Color(color));
 
-//     labels.push_back(
-//         rerun::Text(format("count: %.0f age: %.0fms", o.confidence, age)));
-//   }
-//   log->log("field/obstacles", rerun::Points2D(points)
-//                                   .with_colors(colors)
-//                                   .with_labels(labels)
-//                                   .with_radii(0.1));
-// }
-
-// void Brain::logDepth(int grid_x_count, int grid_y_count,
-//                      vector<vector<int>> &grid_occupied,
-//                      vector<rerun::Vec3D> &points_robot) {
-//   // time is set on the outside
-//   const double grid_size =
-//       get_parameter("obstacle_avoidance.grid_size").as_double(); // 网格大小
-//   const double x_min = 0.0,
-//                x_max = get_parameter("obstacle_avoidance.max_x").as_double();
-//   const double y_min =
-//   -get_parameter("obstacle_avoidance.max_y").as_double(); const double y_max
-//   = -y_min;
-
-//   // 记录原始点云和网格
-//   vector<rerun::Position3D> vertices;
-//   vector<rerun::Color> vertex_colors;
-//   vector<array<uint32_t, 3>> triangle_indices;
-//   const int OCCUPANCY_THRESHOLD =
-//       get_parameter("obstacle_avoidance.occupancy_threshold")
-//           .as_int(); // 设置一个显示用的阈值
-
-//   for (int i = 0; i < grid_x_count; i++) {
-//     for (int j = 0; j < grid_y_count; j++) {
-//       if (grid_occupied[i][j] > 0) {
-//         // 计算有障碍网格的四个顶点坐标
-//         double x0 = x_min + i * grid_size;
-//         double y0 = y_min + j * grid_size;
-//         double x1 = x0 + grid_size;
-//         double y1 = y0 + grid_size;
-
-//         // 添加四个顶点
-//         uint32_t base_index = vertices.size();
-//         vertices.push_back({x0, y0, 0.0});
-//         vertices.push_back({x1, y0, 0.0});
-//         vertices.push_back({x1, y1, 0.0});
-//         vertices.push_back({x0, y1, 0.0});
-
-//         // 设置颜色：根据占用情况设置不同的红色
-//         rerun::Color color;
-//         if (grid_occupied[i][j] > OCCUPANCY_THRESHOLD) {
-//           color = rerun::Color(255, 0, 0, 255); // RGBA, 红色
-//         } else {
-//           color = rerun::Color(255, 255, 0, 255); // RGBA, 黄色
-//         }
-//         vertex_colors.push_back(color);
-//         vertex_colors.push_back(color);
-//         vertex_colors.push_back(color);
-//         vertex_colors.push_back(color);
-
-//         // 添加两个三角形面
-//         triangle_indices.push_back(
-//             {base_index, base_index + 1, base_index + 2});
-//         triangle_indices.push_back(
-//             {base_index, base_index + 2, base_index + 3});
-//       }
-//     }
-//   }
-
-//   vector<uint32_t> point_colors;
-//   for (auto &point : points_robot) {
-//     float z_val = std::clamp(point.z(), 0.0f, 1.0f);
-//     const double obstacleMinHeight =
-//         get_parameter("obstacle_avoidance.obstacle_min_height").as_double();
-//     if (z_val < obstacleMinHeight) {
-//       point_colors.push_back(0x0000FFFF);
-//     } else {
-//       uint8_t r = static_cast<uint8_t>(z_val * 255);
-//       uint8_t g = static_cast<uint8_t>((1 - z_val) * 255);
-//       point_colors.push_back((r << 24) | (g << 16) | 0xFF);
-//     }
-//   }
-
-//   log->log(
-//       "depth/depth_points",
-//       rerun::Points3D(points_robot).with_radii(0.01).with_colors(point_colors));
-
-//   log->log("depth/grid_mesh", rerun::Mesh3D(vertices)
-//                                   .with_vertex_colors(vertex_colors)
-//                                   .with_triangle_indices(triangle_indices));
-
-//   // 记录 ball exclusion box
-//   double r =
-//       get_parameter("obstacle_avoidance.ball_exclusion_radius").as_double();
-//   double h =
-//       get_parameter("obstacle_avoidance.ball_exclusion_height").as_double();
-//   log->log("depth/ball_exclusion_box",
-//            rerun::Boxes3D::from_centers_and_half_sizes(
-//                {{data->ball.posToRobot.x, data->ball.posToRobot.y, h / 2}},
-//                {{r, r, h / 2}})
-//                .with_colors(0x00FF0044) // 半透明绿色
-//   );
-// }
-
-// void Brain::logDebugInfo() {
-//   auto log_ = [=](string msg) {
-//     log->setTimeNow();
-//     log->log("debug/brain_tick", rerun::TextLog(msg));
-//   };
-//   string gameState = tree->getEntry<string>("gc_game_state");
-//   string gameSubState = tree->getEntry<string>("gc_game_sub_state");
-//   string gameSubStateType = tree->getEntry<string>("gc_game_sub_state_type");
-//   string isLead = data->tmImLead ? "ON" : "OFF";
-//   string ballOut = tree->getEntry<bool>("ball_out") ? "YES" : "NO";
-//   string ballDetected = data->ballDetected ? "YES" : "NO";
-//   string decision = tree->getEntry<string>("decision");
-//   string freeKickKickingOff = data->isFreekickKickingOff ? "YES" : "NO";
-//   string directShoot = data->isDirectShoot ? "YES" : "NO";
-//   string primaryStriker = isPrimaryStriker() ? "YES" : "NO";
-//   log_(format(
-//       "Game State: %s, SubState: %s, SubStateType: %s, Lead: %s, Decision:
-//       %s, " "FreeKickKickingOff: %s, DirectShoot: %s, PrimaryStriker: %s",
-//       gameState.c_str(), gameSubState.c_str(), gameSubStateType.c_str(),
-//       isLead.c_str(), decision.c_str(), freeKickKickingOff.c_str(),
-//       directShoot.c_str(), primaryStriker.c_str()));
-
-//   log->setTimeNow();
-//   log->log("debug/my_cost_scalar", rerun::Scalar(data->tmMyCost));
-//   log->log("debug/my_lead_scalar", rerun::Scalar(data->tmImLead));
-// }
-
-void Brain::updateRelativePos(GameObject &obj) {
-  Pose2D pf;
-  pf.x = obj.posToField.x;
-  pf.y = obj.posToField.y;
-  pf.theta = 0;
-  Pose2D pr = data->field2robot(pf);
-  obj.posToRobot.x = pr.x;
-  obj.posToRobot.y = pr.y;
-  obj.range = norm(obj.posToRobot.x, obj.posToRobot.y);
-  obj.yawToRobot = atan2(obj.posToRobot.y, obj.posToRobot.x);
-  obj.pitchToRobot = asin(config->robotHeight / obj.range);
+    labels.push_back(
+        rerun::Text(format("count: %.0f age: %.0fms", o.confidence, age)));
+  }
+  log->log("field/obstacles", rerun::Points2D(points)
+                                  .with_colors(colors)
+                                  .with_labels(labels)
+                                  .with_radii(0.1));
 }
 
-void Brain::updateFieldPos(GameObject &obj) {
-  Pose2D pr;
-  pr.x = obj.posToRobot.x;
-  pr.y = obj.posToRobot.y;
-  pr.theta = 0;
-  Pose2D pf = data->robot2field(pr);
-  obj.posToField.x = pf.x;
-  obj.posToField.y = pf.y;
-  obj.range = norm(obj.posToRobot.x, obj.posToRobot.y);
-  obj.yawToRobot = atan2(obj.posToRobot.y, obj.posToRobot.x);
-  obj.pitchToRobot = asin(config->robotHeight / obj.range);
-}
+void Brain::logDepth(int grid_x_count, int grid_y_count,
+                     vector<vector<int>> &grid_occupied,
+                     vector<rerun::Vec3D> &points_robot) {
+  // time is set on the outside
+  const double grid_size =
+      get_parameter("obstacle_avoidance.grid_size").as_double(); // 网格大小
+  const double x_min = 0.0,
+               x_max = get_parameter("obstacle_avoidance.max_x").as_double();
+  const double y_min = -get_parameter("obstacle_avoidance.max_y").as_double();
+  const double y_max = -y_min;
 
-// void Brain::depthImageCallback(const sensor_msgs::msg::Image &msg) {
-//   try {
-//     // 检查图像数据是否有效
-//     if (msg.data.empty() || msg.height == 0 || msg.width == 0) {
-//       RCLCPP_WARN(get_logger(), "Received empty depth image");
-//       return;
-//     }
+  // 记录原始点云和网格
+  vector<rerun::Position3D> vertices;
+  vector<rerun::Color> vertex_colors;
+  vector<array<uint32_t, 3>> triangle_indices;
+  const int OCCUPANCY_THRESHOLD =
+      get_parameter("obstacle_avoidance.occupancy_threshold")
+          .as_int(); // 设置一个显示用的阈值
 
-//     // 创建深度图像和转换
-//     cv::Mat depthFloat;
-//     // 根据图像编码格式进行处理
-//     if (msg.encoding == "16UC1" || msg.encoding == "mono16") {
-//       size_t expected = (size_t)msg.width * msg.height * sizeof(uint16_t);
-//       if (msg.data.size() < expected) {
-//         RCLCPP_ERROR(get_logger(), "Depth mono16 size mismatch");
-//         return;
-//       }
-//       cv::Mat depthRaw(msg.height, msg.width, CV_16UC1,
-//                        const_cast<uint8_t *>(msg.data.data()));
-//       depthRaw.convertTo(depthFloat, CV_32FC1,
-//                          1.0 / 1000.0); // 若是实际深度单位 mm
-//     } else if (msg.encoding == "32FC1") {
-//       // 检查数据大小是否正确
-//       size_t expected_size = msg.height * msg.width * sizeof(float);
-//       if (msg.data.size() != expected_size) {
-//         RCLCPP_ERROR(get_logger(),
-//                      "Depth image size mismatch: expected %zu, got %zu",
-//                      expected_size, msg.data.size());
-//         return;
-//       }
+  for (int i = 0; i < grid_x_count; i++) {
+    for (int j = 0; j < grid_y_count; j++) {
+      if (grid_occupied[i][j] > 0) {
+        // 计算有障碍网格的四个顶点坐标
+        double x0 = x_min + i * grid_size;
+        double y0 = y_min + j * grid_size;
+        double x1 = x0 + grid_size;
+        double y1 = y0 + grid_size;
 
-//       // 直接创建 32 位浮点数格式的深度图像
-//       depthFloat = cv::Mat(msg.height, msg.width, CV_32FC1,
-//                            const_cast<float *>(reinterpret_cast<const float
-//                            *>(
-//                                msg.data.data())))
-//                        .clone();
+        // 添加四个顶点
+        uint32_t base_index = vertices.size();
+        vertices.push_back({x0, y0, 0.0});
+        vertices.push_back({x1, y0, 0.0});
+        vertices.push_back({x1, y1, 0.0});
+        vertices.push_back({x0, y1, 0.0});
 
-//     } else {
-//       RCLCPP_ERROR(get_logger(), "Unsupported depth image encoding: %s",
-//                    msg.encoding.c_str());
-//       return;
-//     }
+        // 设置颜色：根据占用情况设置不同的红色
+        rerun::Color color;
+        if (grid_occupied[i][j] > OCCUPANCY_THRESHOLD) {
+          color = rerun::Color(255, 0, 0, 255); // RGBA, 红色
+        } else {
+          color = rerun::Color(255, 255, 0, 255); // RGBA, 黄色
+        }
+        vertex_colors.push_back(color);
+        vertex_colors.push_back(color);
+        vertex_colors.push_back(color);
+        vertex_colors.push_back(color);
 
-//     vector<rerun::Vec3D> points_robot; // for log
+        // 添加两个三角形面
+        triangle_indices.push_back(
+            {base_index, base_index + 1, base_index + 2});
+        triangle_indices.push_back(
+            {base_index, base_index + 2, base_index + 3});
+      }
+    }
+  }
 
-//     const double fx = config->camfx;
-//     const double fy = config->camfy;
-//     const double cx = config->camcx;
-//     const double cy = config->camcy;
-//     // cout << "fx = " << fx << " fy = " << fy << " cx = " << cx << " cy = "
-//     <<
-//     // cy << endl;
+  //   vector<uint32_t> point_colors;
+  //   for (auto &point : points_robot) {
+  //     float z_val = std::clamp(point.z(), 0.0f, 1.0f);
+  //     const double obstacleMinHeight =
+  //         get_parameter("obstacle_avoidance.obstacle_min_height").as_double();
+  //     if (z_val < obstacleMinHeight) {
+  //       point_colors.push_back(0x0000FFFF);
+  //     } else {
+  //       uint8_t r = static_cast<uint8_t>(z_val * 255);
+  //       uint8_t g = static_cast<uint8_t>((1 - z_val) * 255);
+  //       point_colors.push_back((r << 24) | (g << 16) | 0xFF);
+  //     }
+  //   }
 
-//     // 定义网格参数
-//     const double grid_size =
-//         get_parameter("obstacle_avoidance.grid_size").as_double(); //
-//         网格大小
-//     const double x_min = 0.0,
-//                  x_max =
-//                  get_parameter("obstacle_avoidance.max_x").as_double();
-//     const double y_min =
-//     -get_parameter("obstacle_avoidance.max_y").as_double(); const double
-//     y_max = -y_min; const int grid_x_count = static_cast<int>((x_max - x_min)
-//     / grid_size); const int grid_y_count = static_cast<int>((y_max - y_min) /
-//     grid_size);
+  //   log->log(
+  //       "depth/depth_points",
+  //       rerun::Points3D(points_robot).with_radii(0.01).with_colors(point_colors));
 
-//     // 创建网格占用数组
-//     vector<vector<int>> grid_occupied(grid_x_count,
-//                                       vector<int>(grid_y_count, 0));
+  //   log->log("depth/grid_mesh", rerun::Mesh3D(vertices)
+  //                                   .with_vertex_colors(vertex_colors)
+  //                                   .with_triangle_indices(triangle_indices));
 
-//     // 处理深度图像点
-//     const int sampleStep =
-//         get_parameter("obstacle_avoidance.depth_sample_step").as_int();
-//     for (int y = 0; y < msg.height; y += sampleStep) {
-//       for (int x = 0; x < msg.width; x += sampleStep) {
-//         float depth = depthFloat.at<float>(y, x);
-//         if (depth > 0) {
-//           // 转换到相机坐标系
-//           double x_cam = (x - cx) * depth / fx;
-//           double y_cam = (y - cy) * depth / fy;
-//           double z_cam = depth;
+  //   // 记录 ball exclusion box
+  //   double r =
+  //       get_parameter("obstacle_avoidance.ball_exclusion_radius").as_double();
+  //   double h =
+  //       get_parameter("obstacle_avoidance.ball_exclusion_height").as_double();
+  //   log->log("depth/ball_exclusion_box",
+  //            rerun::Boxes3D::from_centers_and_half_sizes(
+  //                {{data->ball.posToRobot.x, data->ball.posToRobot.y, h / 2}},
+  //                {{r, r, h / 2}})
+  //                .with_colors(0x00FF0044) // 半透明绿色
+  //   );
+  // }
 
-//           // 转换到机器人坐标系
-//           Eigen::Vector4d point_cam(x_cam, y_cam, z_cam, 1.0);
-//           Eigen::Vector4d point_robot = data->camToRobot * point_cam;
+  // void Brain::logDebugInfo() {
+  //   auto log_ = [=](string msg) {
+  //     log->setTimeNow();
+  //     log->log("debug/brain_tick", rerun::TextLog(msg));
+  //   };
+  //   string gameState = tree->getEntry<string>("gc_game_state");
+  //   string gameSubState = tree->getEntry<string>("gc_game_sub_state");
+  //   string gameSubStateType =
+  //   tree->getEntry<string>("gc_game_sub_state_type"); string isLead =
+  //   data->tmImLead ? "ON" : "OFF"; string ballOut =
+  //   tree->getEntry<bool>("ball_out") ? "YES" : "NO"; string ballDetected =
+  //   data->ballDetected ? "YES" : "NO"; string decision =
+  //   tree->getEntry<string>("decision"); string freeKickKickingOff =
+  //   data->isFreekickKickingOff ? "YES" : "NO"; string directShoot =
+  //   data->isDirectShoot ? "YES" : "NO"; string primaryStriker =
+  //   isPrimaryStriker() ? "YES" : "NO"; log_(format(
+  //       "Game State: %s, SubState: %s, SubStateType: %s, Lead: %s, Decision:
+  //       %s, " "FreeKickKickingOff: %s, DirectShoot: %s, PrimaryStriker: %s",
+  //       gameState.c_str(), gameSubState.c_str(), gameSubStateType.c_str(),
+  //       isLead.c_str(), decision.c_str(), freeKickKickingOff.c_str(),
+  //       directShoot.c_str(), primaryStriker.c_str()));
 
-//           // 记录点用于可视化
-//           points_robot.push_back(
-//               rerun::Vec3D{point_robot(0), point_robot(1), point_robot(2)});
+  //   log->setTimeNow();
+  //   log->log("debug/my_cost_scalar", rerun::Scalar(data->tmMyCost));
+  //   log->log("debug/my_lead_scalar", rerun::Scalar(data->tmImLead));
+  // }
 
-//           // 更新网格占用情况
-//           const double Z_THRESHOLD =
-//               get_parameter("obstacle_avoidance.obstacle_min_height")
-//                   .as_double();
-//           const double EXCLUDE_MAX_X =
-//               get_parameter("obstacle_avoidance.exclusion_x")
-//                   .as_double(); // 排除机器人自己的身体
-//           const double EXCLUDE_MIN_X = -EXCLUDE_MAX_X;
-//           const double EXCLUDE_MAX_Y =
-//               get_parameter("obstacle_avoidance.exclusion_y")
-//                   .as_double(); // 排除机器人自己的身体
-//           const double EXCLUDE_MIN_Y = -EXCLUDE_MAX_Y;
+  void Brain::updateRelativePos(GameObject & obj) {
+    Pose2D pf;
+    pf.x = obj.posToField.x;
+    pf.y = obj.posToField.y;
+    pf.theta = 0;
+    Pose2D pr = data->field2robot(pf);
+    obj.posToRobot.x = pr.x;
+    obj.posToRobot.y = pr.y;
+    obj.range = norm(obj.posToRobot.x, obj.posToRobot.y);
+    obj.yawToRobot = atan2(obj.posToRobot.y, obj.posToRobot.x);
+    obj.pitchToRobot = asin(config->robotHeight / obj.range);
+  }
 
-//           auto isInRange = [&]() {
-//             return point_robot(0) >= x_min && point_robot(0) < x_max &&
-//                    point_robot(1) >= y_min && point_robot(1) < y_max;
-//           };
-//           auto isSelfBody = [&]() {
-//             return point_robot(0) >= EXCLUDE_MIN_X &&
-//                    point_robot(0) <= EXCLUDE_MAX_X &&
-//                    point_robot(1) >= EXCLUDE_MIN_Y &&
-//                    point_robot(1) <= EXCLUDE_MAX_Y;
-//           };
-//           auto isBall = [&]() {
-//             double r =
-//             get_parameter("obstacle_avoidance.ball_exclusion_radius")
-//                            .as_double();
-//             double h =
-//             get_parameter("obstacle_avoidance.ball_exclusion_height")
-//                            .as_double();
-//             return fabs(point_robot(0) - data->ball.posToRobot.x) < r &&
-//                    fabs(point_robot(1) - data->ball.posToRobot.y) < r &&
-//                    point_robot(2) < h;
-//           };
+  void Brain::updateFieldPos(GameObject & obj) {
+    Pose2D pr;
+    pr.x = obj.posToRobot.x;
+    pr.y = obj.posToRobot.y;
+    pr.theta = 0;
+    Pose2D pf = data->robot2field(pr);
+    obj.posToField.x = pf.x;
+    obj.posToField.y = pf.y;
+    obj.range = norm(obj.posToRobot.x, obj.posToRobot.y);
+    obj.yawToRobot = atan2(obj.posToRobot.y, obj.posToRobot.x);
+    obj.pitchToRobot = asin(config->robotHeight / obj.range);
+  }
 
-//           if (point_robot(2) > Z_THRESHOLD && isInRange() && !isSelfBody() &&
-//               !isBall()) {
-//             int grid_x = static_cast<int>((point_robot(0) - x_min) /
-//             grid_size); int grid_y = static_cast<int>((point_robot(1) -
-//             y_min) / grid_size); grid_occupied[grid_x][grid_y] += 1;
-//           }
-//         }
-//       }
-//     }
+  // void Brain::depthImageCallback(const sensor_msgs::msg::Image &msg) {
+  //   try {
+  //     // 检查图像数据是否有效
+  //     if (msg.data.empty() || msg.height == 0 || msg.width == 0) {
+  //       RCLCPP_WARN(get_logger(), "Received empty depth image");
+  //       return;
+  //     }
 
-//     auto obs_old = data->getObstacles();
-//     vector<GameObject> obs_new = {};
+  //     // 创建深度图像和转换
+  //     cv::Mat depthFloat;
+  //     // 根据图像编码格式进行处理
+  //     if (msg.encoding == "16UC1" || msg.encoding == "mono16") {
+  //       size_t expected = (size_t)msg.width * msg.height * sizeof(uint16_t);
+  //       if (msg.data.size() < expected) {
+  //         RCLCPP_ERROR(get_logger(), "Depth mono16 size mismatch");
+  //         return;
+  //       }
+  //       cv::Mat depthRaw(msg.height, msg.width, CV_16UC1,
+  //                        const_cast<uint8_t *>(msg.data.data()));
+  //       depthRaw.convertTo(depthFloat, CV_32FC1,
+  //                          1.0 / 1000.0); // 若是实际深度单位 mm
+  //     } else if (msg.encoding == "32FC1") {
+  //       // 检查数据大小是否正确
+  //       size_t expected_size = msg.height * msg.width * sizeof(float);
+  //       if (msg.data.size() != expected_size) {
+  //         RCLCPP_ERROR(get_logger(),
+  //                      "Depth image size mismatch: expected %zu, got %zu",
+  //                      expected_size, msg.data.size());
+  //         return;
+  //       }
 
-//     // 本次看到的记入 obstables
-//     for (int i = 0; i < grid_x_count; i++) {
-//       for (int j = 0; j < grid_y_count; j++) {
-//         if (grid_occupied[i][j] > 0) {
-//           GameObject obj;
-//           obj.label = "Obstacle";
-//           obj.timePoint = get_clock()->now();
-//           obj.posToRobot.x = x_min + (i + 0.5) * grid_size;
-//           obj.posToRobot.y = y_min + (j + 0.5) * grid_size;
-//           obj.confidence = grid_occupied[i][j];
-//           updateFieldPos(obj);
-//           obs_new.push_back(obj);
-//         }
-//       }
-//     }
+  //       // 直接创建 32 位浮点数格式的深度图像
+  //       depthFloat = cv::Mat(msg.height, msg.width, CV_32FC1,
+  //                            const_cast<float *>(reinterpret_cast<const float
+  //                            *>(
+  //                                msg.data.data())))
+  //                        .clone();
 
-//     // 清理旧 obstacle
-//     for (int i = 0; i < obs_old.size(); i++) {
-//       // 先把当前视野范围内的旧 obstacle 清空, 注意角度只是粗略计算, 并通过
-//       // offset 适当扩大了一些范围.
-//       double visionLeft = data->headYaw + config->camAngleX / 2;
-//       double visionRight = data->headYaw - config->camAngleX / 2;
-//       auto obs = obs_old[i];
-//       const double offset = 0.20;
-//       double obsYawLeft =
-//           atan2(obs.posToRobot.y - offset, obs.posToRobot.x + offset);
-//       double obsYawRight =
-//           atan2(obs.posToRobot.y + offset, obs.posToRobot.x + offset);
-//       if (obsYawLeft < visionLeft && obsYawRight > visionRight)
-//         continue;
+  //     } else {
+  //       RCLCPP_ERROR(get_logger(), "Unsupported depth image encoding: %s",
+  //                    msg.encoding.c_str());
+  //       return;
+  //     }
 
-//       // 如果旧的 obs 与新的 obs 太过接近, 则认为旧的 obs 已经不存在,
-//       // 防止边界情况下 obs 堆积
-//       bool found = false;
-//       for (int j = 0; j < obs_new.size(); j++) {
-//         auto obs_n = obs_new[j];
-//         double dist = norm(obs.posToRobot.x - obs_n.posToRobot.x,
-//                            obs.posToRobot.y - obs_n.posToRobot.y);
-//         if (dist < 0.5 * grid_size) {
-//           found = true;
-//           break;
-//         }
-//       }
-//       if (found)
-//         continue;
+  //     vector<rerun::Vec3D> points_robot; // for log
 
-//       // else
-//       obs_new.push_back(obs);
-//     }
+  //     const double fx = config->camfx;
+  //     const double fy = config->camfy;
+  //     const double cx = config->camcx;
+  //     const double cy = config->camcy;
+  //     // cout << "fx = " << fx << " fy = " << fy << " cx = " << cx << " cy =
+  //     "
+  //     <<
+  //     // cy << endl;
 
-//     data->setObstacles(
-//         obs_new); // note: 此处不清空超时的旧 obstacles, 而在 tick 中清理
-//     log->setTimeSeconds(timePointFromHeader(msg.header).seconds());
-//     logDepth(grid_x_count, grid_y_count, grid_occupied, points_robot);
-//     logObstacles();
+  //     // 定义网格参数
+  //     const double grid_size =
+  //         get_parameter("obstacle_avoidance.grid_size").as_double(); //
+  //         网格大小
+  //     const double x_min = 0.0,
+  //                  x_max =
+  //                  get_parameter("obstacle_avoidance.max_x").as_double();
+  //     const double y_min =
+  //     -get_parameter("obstacle_avoidance.max_y").as_double(); const double
+  //     y_max = -y_min; const int grid_x_count = static_cast<int>((x_max -
+  //     x_min) / grid_size); const int grid_y_count = static_cast<int>((y_max -
+  //     y_min) / grid_size);
 
-//   } catch (const std::exception &e) {
-//     RCLCPP_ERROR(get_logger(), "Exception in depth image callback: %s",
-//                  e.what());
-//   }
-// }
+  //     // 创建网格占用数组
+  //     vector<vector<int>> grid_occupied(grid_x_count,
+  //                                       vector<int>(grid_y_count, 0));
 
-// // // // // double Brain::distToObstacle(double angle) {
-// // // // //   auto obs = data->getObstacles();
-// // // // //   double minDist = 1e9;
-// // // // //   // double obstacleThreshold =
-// static_cast<double>(config->obstacleThreshold);
-// // // // //   double obstacleThreshold = static_cast<double>(
-// // // // //
-// get_parameter("obstacle_avoidance.occupancy_threshold").as_int());
+  //     // 处理深度图像点
+  //     const int sampleStep =
+  //         get_parameter("obstacle_avoidance.depth_sample_step").as_int();
+  //     for (int y = 0; y < msg.height; y += sampleStep) {
+  //       for (int x = 0; x < msg.width; x += sampleStep) {
+  //         float depth = depthFloat.at<float>(y, x);
+  //         if (depth > 0) {
+  //           // 转换到相机坐标系
+  //           double x_cam = (x - cx) * depth / fx;
+  //           double y_cam = (y - cy) * depth / fy;
+  //           double z_cam = depth;
 
-// // // // //   double collisionThreshold = config->collisionThreshold;
+  //           // 转换到机器人坐标系
+  //           Eigen::Vector4d point_cam(x_cam, y_cam, z_cam, 1.0);
+  //           Eigen::Vector4d point_robot = data->camToRobot * point_cam;
 
-// // // // //   for (int i = 0; i < obs.size(); i++) {
-// // // // //     if (obs[i].confidence < obstacleThreshold)
-// // // // //       continue;
+  //           // 记录点用于可视化
+  //           points_robot.push_back(
+  //               rerun::Vec3D{point_robot(0), point_robot(1),
+  //               point_robot(2)});
 
-// // // // //     auto o = obs[i];
-// // // // //     Line line = {0, 0, cos(angle) * 100, sin(angle) * 100};
-// // // // //     double perpDist = fabs(
-// // // // //         pointPerpDistToLine(Point2D{o.posToRobot.x,
-// o.posToRobot.y}, line));
-// // // // //     if (perpDist < collisionThreshold) {
-// // // // //       double dist = innerProduct(vector<double>{o.posToRobot.x,
-// o.posToRobot.y},
-// // // // //                                  vector<double>{cos(angle),
-// sin(angle)});
-// // // // //       if (dist > 0 && dist < minDist) {
-// // // // //         minDist = dist;
-// // // // //       }
-// // // // //     }
-// // // // //   }
-// // // // //   return minDist;
-// // // // // }
+  //           // 更新网格占用情况
+  //           const double Z_THRESHOLD =
+  //               get_parameter("obstacle_avoidance.obstacle_min_height")
+  //                   .as_double();
+  //           const double EXCLUDE_MAX_X =
+  //               get_parameter("obstacle_avoidance.exclusion_x")
+  //                   .as_double(); // 排除机器人自己的身体
+  //           const double EXCLUDE_MIN_X = -EXCLUDE_MAX_X;
+  //           const double EXCLUDE_MAX_Y =
+  //               get_parameter("obstacle_avoidance.exclusion_y")
+  //                   .as_double(); // 排除机器人自己的身体
+  //           const double EXCLUDE_MIN_Y = -EXCLUDE_MAX_Y;
 
-// // // // // vector<double> Brain::findSafeDirections(double startAngle,
-// double safeDist,
-// // // // //                                          double step) {
-// // // // //   double safeAngleLeft = startAngle;
-// // // // //   double safeAngleRight = startAngle;
-// // // // //   double leftFound = 0;
-// // // // //   double rightFound = 0;
-// // // // //   for (double angle = startAngle; angle < startAngle + M_PI;
-// angle += step) {
-// // // // //     if (distToObstacle(angle) > safeDist) {
-// // // // //       safeAngleLeft = angle;
-// // // // //       leftFound = 1;
-// // // // //       break;
-// // // // //     }
-// // // // //   }
-// // // // //   for (double angle = startAngle; angle > startAngle - M_PI;
-// angle -= step) {
-// // // // //     if (distToObstacle(angle) > safeDist) {
-// // // // //       safeAngleRight = angle;
-// // // // //       rightFound = 1;
-// // // // //       break;
-// // // // //     }
-// // // // //   }
+  //           auto isInRange = [&]() {
+  //             return point_robot(0) >= x_min && point_robot(0) < x_max &&
+  //                    point_robot(1) >= y_min && point_robot(1) < y_max;
+  //           };
+  //           auto isSelfBody = [&]() {
+  //             return point_robot(0) >= EXCLUDE_MIN_X &&
+  //                    point_robot(0) <= EXCLUDE_MAX_X &&
+  //                    point_robot(1) >= EXCLUDE_MIN_Y &&
+  //                    point_robot(1) <= EXCLUDE_MAX_Y;
+  //           };
+  //           auto isBall = [&]() {
+  //             double r =
+  //             get_parameter("obstacle_avoidance.ball_exclusion_radius")
+  //                            .as_double();
+  //             double h =
+  //             get_parameter("obstacle_avoidance.ball_exclusion_height")
+  //                            .as_double();
+  //             return fabs(point_robot(0) - data->ball.posToRobot.x) < r &&
+  //                    fabs(point_robot(1) - data->ball.posToRobot.y) < r &&
+  //                    point_robot(2) < h;
+  //           };
 
-// // // // //   return vector<double>{leftFound, toPInPI(safeAngleLeft),
-// rightFound,
-// // // // //                         toPInPI(safeAngleRight)};
-// // // // // }
+  //           if (point_robot(2) > Z_THRESHOLD && isInRange() && !isSelfBody()
+  //           &&
+  //               !isBall()) {
+  //             int grid_x = static_cast<int>((point_robot(0) - x_min) /
+  //             grid_size); int grid_y = static_cast<int>((point_robot(1) -
+  //             y_min) / grid_size); grid_occupied[grid_x][grid_y] += 1;
+  //           }
+  //         }
+  //       }
+  //     }
 
-// // // // // double Brain::calcAvoidDir(double startAngle, double safeDist) {
-// // // // //   auto res = findSafeDirections(startAngle, safeDist);
-// // // // //   bool leftFound = res[0] > 0.5;
-// // // // //   bool rightFound = res[2] > 0.5;
-// // // // //   double angleLeft = res[1];
-// // // // //   double angleRight = res[3];
-// // // // //   double determinedAngle = 0;
-// // // // //   if (leftFound && rightFound) {
-// // // // //     determinedAngle =
-// // // // //         fabs(angleLeft) < fabs(angleRight) ? angleLeft :
-// angleRight;
-// // // // //   } else if (leftFound) {
-// // // // //     determinedAngle = angleLeft;
-// // // // //   } else if (rightFound) {
-// // // // //     determinedAngle = angleRight;
-// // // // //   } else {
-// // // // //     return 0;
-// // // // //   }
-// // // // //   return toPInPI(determinedAngle);
-// // // // // }
+  //     auto obs_old = data->getObstacles();
+  //     vector<GameObject> obs_new = {};
 
-// // // // // void Brain::updateLogFile() {
-// // // // //   if (config->rerunLogEnableFile &&
-// // // // //       msecsSince(data->timeLastLogSave) >
-// config->rerunLogMaxFileMins * 60000)
-// // // // //     log->updateLogFilePath();
-// // // // // }
+  //     // 本次看到的记入 obstables
+  //     for (int i = 0; i < grid_x_count; i++) {
+  //       for (int j = 0; j < grid_y_count; j++) {
+  //         if (grid_occupied[i][j] > 0) {
+  //           GameObject obj;
+  //           obj.label = "Obstacle";
+  //           obj.timePoint = get_clock()->now();
+  //           obj.posToRobot.x = x_min + (i + 0.5) * grid_size;
+  //           obj.posToRobot.y = y_min + (j + 0.5) * grid_size;
+  //           obj.confidence = grid_occupied[i][j];
+  //           updateFieldPos(obj);
+  //           obs_new.push_back(obj);
+  //         }
+  //       }
+  //     }
 
-// // // // // // ------------------------------------------------------ 调试
-// log 相关
-// // // // // // ------------------------------------------------------
-// // // // // void Brain::logObstacleDistance() {
-// // // // //   log->setTimeNow();
+  //     // 清理旧 obstacle
+  //     for (int i = 0; i < obs_old.size(); i++) {
+  //       // 先把当前视野范围内的旧 obstacle 清空, 注意角度只是粗略计算, 并通过
+  //       // offset 适当扩大了一些范围.
+  //       double visionLeft = data->headYaw + config->camAngleX / 2;
+  //       double visionRight = data->headYaw - config->camAngleX / 2;
+  //       auto obs = obs_old[i];
+  //       const double offset = 0.20;
+  //       double obsYawLeft =
+  //           atan2(obs.posToRobot.y - offset, obs.posToRobot.x + offset);
+  //       double obsYawRight =
+  //           atan2(obs.posToRobot.y + offset, obs.posToRobot.x + offset);
+  //       if (obsYawLeft < visionLeft && obsYawRight > visionRight)
+  //         continue;
 
-// // // // //   // log obstacle distance for test
-// // // // //   vector<rerun::LineStrip2D> lines = {};
-// // // // //   for (int i = 0; i < 180; i++) {
-// // // // //     double angle = i * M_PI / 90;
-// // // // //     double dist = min(5.0, distToObstacle(angle));
-// // // // //     double angle_f = toPInPI(data->robotPoseToField.theta +
-// angle);
-// // // // //     lines.push_back(rerun::LineStrip2D(
-// // // // //         {{data->robotPoseToField.x, -data->robotPoseToField.y},
-// // // // //          {data->robotPoseToField.x + cos(-angle_f) * dist,
-// // // // //           -data->robotPoseToField.y + sin(-angle_f) * dist}}));
-// // // // //   }
-// // // // //   log->log("field/obstacle_distance", rerun::LineStrips2D(lines)
-// // // // // .with_colors(0x666666FF)
-// // // // //                                           .with_radii(0.01)
-// // // // //                                           .with_draw_order(-10));
-// // // // // }
+  //       // 如果旧的 obs 与新的 obs 太过接近, 则认为旧的 obs 已经不存在,
+  //       // 防止边界情况下 obs 堆积
+  //       bool found = false;
+  //       for (int j = 0; j < obs_new.size(); j++) {
+  //         auto obs_n = obs_new[j];
+  //         double dist = norm(obs.posToRobot.x - obs_n.posToRobot.x,
+  //                            obs.posToRobot.y - obs_n.posToRobot.y);
+  //         if (dist < 0.5 * grid_size) {
+  //           found = true;
+  //           break;
+  //         }
+  //       }
+  //       if (found)
+  //         continue;
 
-// // // // void Brain::logLags() {
-// // // //   log->setTimeNow();
-// // // //   auto color = 0x00FF00FF;
+  //       // else
+  //       obs_new.push_back(obs);
+  //     }
 
-// // // //   double detLag = msecsSince(data->timeLastDet);
-// // // //   if (detLag > 500)
-// // // //     color = 0xFF0000FF;
-// // // //   else if (detLag > 100)
-// // // //     color = 0xFFFF00FF;
-// // // //   else
-// // // //     color = 0x00FF00FF;
-// // // //   double MAX_LAG_LENGTH = config->camPixX;
-// // // //   log->log("image/detection_lag",
-// // // //            rerun::LineStrips2D(
-// // // //                rerun::LineStrip2D(
-// // // //                    {{10., -150.}, {10. + min(detLag,
-// MAX_LAG_LENGTH), -150.}}))
-// // // //                .with_colors(color)
-// // // //                .with_radii(2.0)
-// // // //                .with_draw_order(10)
-// // // //                .with_labels({format("Det Lag %.0fms", detLag)}));
-// // // //   log->log("performance/detection_lag_timeseries",
-// rerun::Scalar(detLag));
+  //     data->setObstacles(
+  //         obs_new); // note: 此处不清空超时的旧 obstacles, 而在 tick 中清理
+  //     log->setTimeSeconds(timePointFromHeader(msg.header).seconds());
+  //     logDepth(grid_x_count, grid_y_count, grid_occupied, points_robot);
+  //     logObstacles();
 
-// // // //   // log fieldline detection delay
-// // // //   double lineLag = msecsSince(data->timeLastLineDet);
-// // // //   if (lineLag > 500)
-// // // //     color = 0xFF0000FF;
-// // // //   else if (lineLag > 100)
-// // // //     color = 0xFFFF00FF;
-// // // //   else
-// // // //     color = 0x00FF00FF;
+  //   } catch (const std::exception &e) {
+  //     RCLCPP_ERROR(get_logger(), "Exception in depth image callback: %s",
+  //                  e.what());
+  //   }
+  // }
 
-// // // //   log->log("image/fieldline_detection_lag",
-// // // //            rerun::LineStrips2D(
-// // // //                rerun::LineStrip2D(
-// // // //                    {{10., -100.}, {10. + min(lineLag,
-// MAX_LAG_LENGTH), -100.}}))
-// // // //                .with_colors(color)
-// // // //                .with_radii(2.0)
-// // // //                .with_draw_order(10)
-// // // //                .with_labels({format("Line Det Lag %.0fms",
-// lineLag)}));
-// // // //   log->log("performance/fieldline_detection_lag_timeseries",
-// // // //            rerun::Scalar(lineLag));
+  // // // // // double Brain::distToObstacle(double angle) {
+  // // // // //   auto obs = data->getObstacles();
+  // // // // //   double minDist = 1e9;
+  // // // // //   // double obstacleThreshold =
+  // static_cast<double>(config->obstacleThreshold);
+  // // // // //   double obstacleThreshold = static_cast<double>(
+  // // // // //
+  // get_parameter("obstacle_avoidance.occupancy_threshold").as_int());
 
-// // // //   // log game control delay
-// // // //   double gcLag = msecsSince(data->timeLastGamecontrolMsg);
-// // // //   if (gcLag > 5000)
-// // // //     color = 0xFF0000FF;
-// // // //   else if (gcLag > 1000)
-// // // //     color = 0xFFFF00FF;
-// // // //   else
-// // // //     color = 0x00FF00FF;
+  // // // // //   double collisionThreshold = config->collisionThreshold;
 
-// // // //   log->log("image/gamecontrol_lag",
-// // // //            rerun::LineStrips2D(
-// // // //                rerun::LineStrip2D(
-// // // //                    {{10., -50.}, {10. + min(gcLag, MAX_LAG_LENGTH),
-// -50.}}))
-// // // //                .with_colors(color)
-// // // //                .with_radii(2.0)
-// // // //                .with_draw_order(10)
-// // // //                .with_labels({format("GC Lag %.0fms", gcLag)}));
-// // // //   log->log("performance/gamecontrol_lag_timeseries",
-// rerun::Scalar(gcLag));
-// // // // }
+  // // // // //   for (int i = 0; i < obs.size(); i++) {
+  // // // // //     if (obs[i].confidence < obstacleThreshold)
+  // // // // //       continue;
 
-// // // void Brain::statusReport() {
-// // //   if (!config->soundEnable || config->soundPack != "espeak")
-// // //     return;
+  // // // // //     auto o = obs[i];
+  // // // // //     Line line = {0, 0, cos(angle) * 100, sin(angle) * 100};
+  // // // // //     double perpDist = fabs(
+  // // // // //         pointPerpDistToLine(Point2D{o.posToRobot.x,
+  // o.posToRobot.y}, line));
+  // // // // //     if (perpDist < collisionThreshold) {
+  // // // // //       double dist = innerProduct(vector<double>{o.posToRobot.x,
+  // o.posToRobot.y},
+  // // // // //                                  vector<double>{cos(angle),
+  // sin(angle)});
+  // // // // //       if (dist > 0 && dist < minDist) {
+  // // // // //         minDist = dist;
+  // // // // //       }
+  // // // // //     }
+  // // // // //   }
+  // // // // //   return minDist;
+  // // // // // }
 
-// // //   log->setTimeNow();
-// // //   static int reportInterval = 100;
-// // //   static string lastReport = "";
-// // //   string report;
-// // //   bool camOK = msecsSince(data->timeLastDet) < 1000;
-// // //   bool gcOK = msecsSince(data->timeLastGamecontrolMsg) < 1000;
+  // // // // // vector<double> Brain::findSafeDirections(double startAngle,
+  // double safeDist,
+  // // // // //                                          double step) {
+  // // // // //   double safeAngleLeft = startAngle;
+  // // // // //   double safeAngleRight = startAngle;
+  // // // // //   double leftFound = 0;
+  // // // // //   double rightFound = 0;
+  // // // // //   for (double angle = startAngle; angle < startAngle + M_PI;
+  // angle += step) {
+  // // // // //     if (distToObstacle(angle) > safeDist) {
+  // // // // //       safeAngleLeft = angle;
+  // // // // //       leftFound = 1;
+  // // // // //       break;
+  // // // // //     }
+  // // // // //   }
+  // // // // //   for (double angle = startAngle; angle > startAngle - M_PI;
+  // angle -= step) {
+  // // // // //     if (distToObstacle(angle) > safeDist) {
+  // // // // //       safeAngleRight = angle;
+  // // // // //       rightFound = 1;
+  // // // // //       break;
+  // // // // //     }
+  // // // // //   }
 
-// // //   if (camOK && gcOK) {
-// // //     report = "Team" + to_string(config->teamId) + " Player " +
-// // //              to_string(config->playerId) + " " +
-// // //              tree->getEntry<string>("player_role") + " " + " OK";
-// // //   } else {
-// // //     report = "";
-// // //     if (!camOK)
-// // //       report += "camera lost";
-// // //     if (!gcOK)
-// // //       report += "gamecontrol lost";
-// // //   }
-// // //   if (lastReport != report) {
-// // //     speak(report);
-// // //     lastReport = report;
-// // //   }
-// // // }
+  // // // // //   return vector<double>{leftFound, toPInPI(safeAngleLeft),
+  // rightFound,
+  // // // // //                         toPInPI(safeAngleRight)};
+  // // // // // }
 
-// // void Brain::logStatusToConsole() {
-// //   static int cnt = 0;
-// //   const int LOG_INTERVAL = 30;
-// //   cnt++;
-// //   if (cnt % LOG_INTERVAL == 0) {
-// //     string msg = "";
-// //     string gameState = tree->getEntry<string>("gc_game_state");
-// //     gameState = gameState == "" ? "-----" : gameState;
-// //     string gameSubType = tree->getEntry<string>("gc_game_sub_state_type");
-// //     gameSubType = gameSubType == "" ? "-----" : gameSubType;
-// //     string gameSubState = tree->getEntry<string>("gc_game_sub_state");
-// //     gameSubState = gameSubState == "" ? "-----" : gameSubState;
+  double Brain::calcAvoidDir(double startAngle, double safeDist) {
+    auto res = findSafeDirections(startAngle, safeDist);
+    bool leftFound = res[0] > 0.5;
+    bool rightFound = res[2] > 0.5;
+    double angleLeft = res[1];
+    double angleRight = res[3];
+    double determinedAngle = 0;
+    if (leftFound && rightFound) {
+      determinedAngle =
+          fabs(angleLeft) < fabs(angleRight) ? angleLeft : angleRight;
+    } else if (leftFound) {
+      determinedAngle = angleLeft;
+    } else if (rightFound) {
+      determinedAngle = angleRight;
+    } else {
+      return 0;
+    }
+    return toPInPI(determinedAngle);
+  }
 
-// //     msg += format("ROBOT:\n\tTeamID: %d\tPlayerID: %d\tNumberOfPlayers: "
-// //                   "%d\tRole: %s\tStartRole: %s\n\n",
-// //                   config->teamId, config->playerId, config->numOfPlayers,
-// //                   tree->getEntry<string>("player_role").c_str(),
-// //                   config->playerRole.c_str());
-// //     msg += format(
-// //         "GAME:\n\tState: %s\tKickOffSide: %s\tisKickingOff:
-// %s(%s)\n\tSubType: "
-// //         "%s\tSubState: %s\tSubKickOffSide: %s\tisKickingOff:
-// %s(%s)\n\tScore: "
-// //         "%s\tJustScored: %s\n\tLiveCount: %d\tOppoLiveCount: %d\tPrimary:
-// "
-// //         "%s\n\n",
-// //         gameState.c_str(),
-// //         tree->getEntry<bool>("gc_is_kickoff_side") ? "YES" : "NO",
-// //         data->isKickingOff ? "YES" : "NO",
-// //         msecsSince(data->kickoffStartTime) / 1000 > 100
-// //             ? "--"
-// //             : to_string(msecsSince(data->kickoffStartTime) /
-// 1000).c_str(),
-// //         gameSubType.c_str(), gameSubState.c_str(),
-// //         tree->getEntry<bool>("gc_is_sub_state_kickoff_side") ? "YES" :
-// "NO",
-// //         data->isFreekickKickingOff ? "YES" : "NO",
-// //         msecsSince(data->freekickKickoffStartTime) / 1000 > 100
-// //             ? "--"
-// //             : to_string(msecsSince(data->freekickKickoffStartTime) / 1000)
-// //                   .c_str(),
-// //         format("%d:%d", data->score, data->oppoScore).c_str(),
-// //         tree->getEntry<bool>("we_just_scored") ? "YES" : "NO",
-// data->liveCount,
-// //         data->oppoLiveCount, isPrimaryStriker() ? "YES" : "NO");
+  void Brain::updateLogFile() {
+    if (config->rerunLogEnableFile &&
+        msecsSince(data->timeLastLogSave) > config->rerunLogMaxFileMins * 60000)
+      log->updateLogFilePath();
+  }
+  // // // // // // ------------------------------------------------------ 调试
+  // log 相关
+  // // // // // // ------------------------------------------------------
+  // // // // // void Brain::logObstacleDistance() {
+  // // // // //   log->setTimeNow();
 
-// //     msg += getComLogString();
+  // // // // //   // log obstacle distance for test
+  // // // // //   vector<rerun::LineStrip2D> lines = {};
+  // // // // //   for (int i = 0; i < 180; i++) {
+  // // // // //     double angle = i * M_PI / 90;
+  // // // // //     double dist = min(5.0, distToObstacle(angle));
+  // // // // //     double angle_f = toPInPI(data->robotPoseToField.theta +
+  // angle);
+  // // // // //     lines.push_back(rerun::LineStrip2D(
+  // // // // //         {{data->robotPoseToField.x, -data->robotPoseToField.y},
+  // // // // //          {data->robotPoseToField.x + cos(-angle_f) * dist,
+  // // // // //           -data->robotPoseToField.y + sin(-angle_f) * dist}}));
+  // // // // //   }
+  // // // // //   log->log("field/obstacle_distance",
+  // rerun::LineStrips2D(lines)
+  // // // // // .with_colors(0x666666FF)
+  // // // // //                                           .with_radii(0.01)
+  // // // // // .with_draw_order(-10));
+  // // // // // }
 
-// //     msg +=
-// //         format("DEBUG:\n\tcom: %s\tlogFile: %s\tlogTCP: %s\n\tvxFactor: "
-// //                "%.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime:
-// %.0fms",
-// //                config->enableCom ? "YES" : "NO",
-// //                config->rerunLogEnableFile ? "YES" : "NO",
-// //                config->rerunLogEnableTCP ? "YES" : "NO", config->vxFactor,
-// //                config->yawOffset, tree->getEntry<int>("control_state"),
-// //                msecsSince(data->lastTick));
-// //     prtDebug(msg);
-// //   }
-// //   data->lastTick = get_clock()->now();
-// // }
+  // // // // void Brain::logLags() {
+  // // // //   log->setTimeNow();
+  // // // //   auto color = 0x00FF00FF;
 
-// string Brain::getComLogString() {
-//   stringstream ss;
-//   int onFieldCnt = 0;
-//   int aliveCnt = 0;
-//   int selfIdx = config->playerId - 1;
-//   vector<int> onFieldIdxs = {};
-//   for (int i = 0; i < HL_MAX_NUM_PLAYERS; i++) {
-//     if (i == selfIdx)
-//       continue;
+  // // // //   double detLag = msecsSince(data->timeLastDet);
+  // // // //   if (detLag > 500)
+  // // // //     color = 0xFF0000FF;
+  // // // //   else if (detLag > 100)
+  // // // //     color = 0xFFFF00FF;
+  // // // //   else
+  // // // //     color = 0x00FF00FF;
+  // // // //   double MAX_LAG_LENGTH = config->camPixX;
+  // // // //   log->log("image/detection_lag",
+  // // // //            rerun::LineStrips2D(
+  // // // //                rerun::LineStrip2D(
+  // // // //                    {{10., -150.}, {10. + min(detLag,
+  // MAX_LAG_LENGTH), -150.}}))
+  // // // //                .with_colors(color)
+  // // // //                .with_radii(2.0)
+  // // // //                .with_draw_order(10)
+  // // // //                .with_labels({format("Det Lag %.0fms", detLag)}));
+  // // // //   log->log("performance/detection_lag_timeseries",
+  // rerun::Scalar(detLag));
 
-//     if (data->penalty[i] == PENALTY_NONE) {
-//       onFieldCnt += 1;
-//       onFieldIdxs.push_back(i);
-//     }
+  // // // //   // log fieldline detection delay
+  // // // //   double lineLag = msecsSince(data->timeLastLineDet);
+  // // // //   if (lineLag > 500)
+  // // // //     color = 0xFF0000FF;
+  // // // //   else if (lineLag > 100)
+  // // // //     color = 0xFFFF00FF;
+  // // // //   else
+  // // // //     color = 0x00FF00FF;
 
-//     if (data->tmStatus[i].isAlive)
-//       aliveCnt += 1;
-//   }
-//   ss << CYAN_CODE << "COM: " << "\n";
-//   ss << "Teammates: OnField: " << onFieldCnt << "[";
-//   for (int i = 0; i < onFieldIdxs.size(); i++) {
-//     int idx = onFieldIdxs[i];
-//     ss << " P" << idx + 1 << " ";
-//   }
-//   ss << "]";
-//   ss << "  Alive: " << aliveCnt << "  TMCMDID: " << data->tmCmdId
-//      << "  ReceivedDMD: " << data->tmReceivedCmd << "\n";
+  // // // //   log->log("image/fieldline_detection_lag",
+  // // // //            rerun::LineStrips2D(
+  // // // //                rerun::LineStrip2D(
+  // // // //                    {{10., -100.}, {10. + min(lineLag,
+  // MAX_LAG_LENGTH), -100.}}))
+  // // // //                .with_colors(color)
+  // // // //                .with_radii(2.0)
+  // // // //                .with_draw_order(10)
+  // // // //                .with_labels({format("Line Det Lag %.0fms",
+  // lineLag)}));
+  // // // //   log->log("performance/fieldline_detection_lag_timeseries",
+  // // // //            rerun::Scalar(lineLag));
 
-//   // Self info
-//   ss << "Self\tCost: " << format("%.1f", data->tmMyCost) << "\tLead: ";
-//   if (data->tmImLead)
-//     ss << GREEN_CODE << "YES" << CYAN_CODE;
-//   else
-//     ss << RED_CODE << "NO" << CYAN_CODE;
-//   ss << "    TMCMD: " << data->tmCmdId
-//      << format("\tCMD: [%d]%d", data->tmMyCmdId, data->tmMyCmd);
-//   ss << "\n";
+  // // // //   // log game control delay
+  // // // //   double gcLag = msecsSince(data->timeLastGamecontrolMsg);
+  // // // //   if (gcLag > 5000)
+  // // // //     color = 0xFF0000FF;
+  // // // //   else if (gcLag > 1000)
+  // // // //     color = 0xFFFF00FF;
+  // // // //   else
+  // // // //     color = 0x00FF00FF;
 
-//   // Teammates info
-//   for (int i = 0; i < onFieldIdxs.size(); i++) {
-//     int idx = onFieldIdxs[i];
-//     auto status = data->tmStatus[idx];
-//     ss << "P" << idx + 1 << "[";
-//     if (status.isAlive)
-//       ss << GREEN_CODE << "★" << CYAN_CODE;
-//     else
-//       ss << RED_CODE << "☆" << CYAN_CODE;
-//     ss << "]\tCost: " << format("%.1f", status.cost);
-//     ss << "\tLead: ";
-//     if (status.isLead)
-//       ss << GREEN_CODE << "YES" << CYAN_CODE;
-//     else
-//       ss << RED_CODE << "NO" << CYAN_CODE;
-//     ss << "\tCMD: " << format("[%d]%d", status.cmdId, status.cmd);
-//     ss << "\tLag: " << format("%.0f", msecsSince(status.timeLastCom)) << "ms"
-//        << "\n";
-//   }
-//   ss << "\n";
+  // // // //   log->log("image/gamecontrol_lag",
+  // // // //            rerun::LineStrips2D(
+  // // // //                rerun::LineStrip2D(
+  // // // //                    {{10., -50.}, {10. + min(gcLag,
+  // MAX_LAG_LENGTH), -50.}}))
+  // // // //                .with_colors(color)
+  // // // //                .with_radii(2.0)
+  // // // //                .with_draw_order(10)
+  // // // //                .with_labels({format("GC Lag %.0fms", gcLag)}));
+  // // // //   log->log("performance/gamecontrol_lag_timeseries",
+  // rerun::Scalar(gcLag));
+  // // // // }
 
-//   return ss.str();
-// }
+  // // // void Brain::statusReport() {
+  // // //   if (!config->soundEnable || config->soundPack != "espeak")
+  // // //     return;
 
-// bool Brain::isFreekickStartPlacing() {
-//   return (tree->getEntry<string>("gc_game_sub_state_type") == "FREE_KICK" &&
-//           tree->getEntry<string>("gc_game_state") == "PLAY" &&
-//           tree->getEntry<string>("gc_game_sub_state") == "GET_READY");
-// }
+  // // //   log->setTimeNow();
+  // // //   static int reportInterval = 100;
+  // // //   static string lastReport = "";
+  // // //   string report;
+  // // //   bool camOK = msecsSince(data->timeLastDet) < 1000;
+  // // //   bool gcOK = msecsSince(data->timeLastGamecontrolMsg) < 1000;
 
-// void Brain::playSoundForFun() {
-//   string soundPack = config->soundPack;
-//   if (config->soundEnable && soundPack != "espeak") {
-//     static string gcGameState_last;
-//     string gcGameState = tree->getEntry<string>("gc_game_state");
+  // // //   if (camOK && gcOK) {
+  // // //     report = "Team" + to_string(config->teamId) + " Player " +
+  // // //              to_string(config->playerId) + " " +
+  // // //              tree->getEntry<string>("player_role") + " " + " OK";
+  // // //   } else {
+  // // //     report = "";
+  // // //     if (!camOK)
+  // // //       report += "camera lost";
+  // // //     if (!gcOK)
+  // // //       report += "gamecontrol lost";
+  // // //   }
+  // // //   if (lastReport != report) {
+  // // //     speak(report);
+  // // //     lastReport = report;
+  // // //   }
+  // // // }
 
-//     static bool gameStarted = false;
-//     if (gcGameState == "PLAY")
-//       gameStarted = true;
-//     if (gcGameState == "READY") {
-//       if (!gameStarted)
-//         playSound(soundPack + "-ready", 2000);
-//       else if (tree->getEntry<bool>("we_just_scored"))
-//         playSound(soundPack + "-celebrate", 2000);
-//       else
-//         playSound(soundPack + "-regret", 2000);
-//     }
+  // // void Brain::logStatusToConsole() {
+  // //   static int cnt = 0;
+  // //   const int LOG_INTERVAL = 30;
+  // //   cnt++;
+  // //   if (cnt % LOG_INTERVAL == 0) {
+  // //     string msg = "";
+  // //     string gameState = tree->getEntry<string>("gc_game_state");
+  // //     gameState = gameState == "" ? "-----" : gameState;
+  // //     string gameSubType =
+  // tree->getEntry<string>("gc_game_sub_state_type");
+  // //     gameSubType = gameSubType == "" ? "-----" : gameSubType;
+  // //     string gameSubState = tree->getEntry<string>("gc_game_sub_state");
+  // //     gameSubState = gameSubState == "" ? "-----" : gameSubState;
 
-//     if (gcGameState == "PLAY") {
-//       auto decision = tree->getEntry<string>("decision");
-//       if (decision == "chase")
-//         playSound(soundPack + "-chase", 5000);
-//       else if (decision == "adjust")
-//         playSound(soundPack + "-adjust", 2000);
-//       else if (decision == "kick")
-//         playSound(soundPack + "-kick", 2000);
-//     }
-//   }
-// }
+  // //     msg += format("ROBOT:\n\tTeamID: %d\tPlayerID: %d\tNumberOfPlayers:
+  // "
+  // //                   "%d\tRole: %s\tStartRole: %s\n\n",
+  // //                   config->teamId, config->playerId,
+  // config->numOfPlayers,
+  // //                   tree->getEntry<string>("player_role").c_str(),
+  // //                   config->playerRole.c_str());
+  // //     msg += format(
+  // //         "GAME:\n\tState: %s\tKickOffSide: %s\tisKickingOff:
+  // %s(%s)\n\tSubType: "
+  // //         "%s\tSubState: %s\tSubKickOffSide: %s\tisKickingOff:
+  // %s(%s)\n\tScore: "
+  // //         "%s\tJustScored: %s\n\tLiveCount: %d\tOppoLiveCount:
+  // %d\tPrimary:
+  // "
+  // //         "%s\n\n",
+  // //         gameState.c_str(),
+  // //         tree->getEntry<bool>("gc_is_kickoff_side") ? "YES" : "NO",
+  // //         data->isKickingOff ? "YES" : "NO",
+  // //         msecsSince(data->kickoffStartTime) / 1000 > 100
+  // //             ? "--"
+  // //             : to_string(msecsSince(data->kickoffStartTime) /
+  // 1000).c_str(),
+  // //         gameSubType.c_str(), gameSubState.c_str(),
+  // //         tree->getEntry<bool>("gc_is_sub_state_kickoff_side") ? "YES" :
+  // "NO",
+  // //         data->isFreekickKickingOff ? "YES" : "NO",
+  // //         msecsSince(data->freekickKickoffStartTime) / 1000 > 100
+  // //             ? "--"
+  // //             : to_string(msecsSince(data->freekickKickoffStartTime) /
+  // 1000)
+  // //                   .c_str(),
+  // //         format("%d:%d", data->score, data->oppoScore).c_str(),
+  // //         tree->getEntry<bool>("we_just_scored") ? "YES" : "NO",
+  // data->liveCount,
+  // //         data->oppoLiveCount, isPrimaryStriker() ? "YES" : "NO");
+
+  // //     msg += getComLogString();
+
+  // //     msg +=
+  // //         format("DEBUG:\n\tcom: %s\tlogFile: %s\tlogTCP: %s\n\tvxFactor:
+  // "
+  // //                "%.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime:
+  // %.0fms",
+  // //                config->enableCom ? "YES" : "NO",
+  // //                config->rerunLogEnableFile ? "YES" : "NO",
+  // //                config->rerunLogEnableTCP ? "YES" : "NO",
+  // config->vxFactor,
+  // //                config->yawOffset, tree->getEntry<int>("control_state"),
+  // //                msecsSince(data->lastTick));
+  // //     prtDebug(msg);
+  // //   }
+  // //   data->lastTick = get_clock()->now();
+  // // }
+
+  // string Brain::getComLogString() {
+  //   stringstream ss;
+  //   int onFieldCnt = 0;
+  //   int aliveCnt = 0;
+  //   int selfIdx = config->playerId - 1;
+  //   vector<int> onFieldIdxs = {};
+  //   for (int i = 0; i < HL_MAX_NUM_PLAYERS; i++) {
+  //     if (i == selfIdx)
+  //       continue;
+
+  //     if (data->penalty[i] == PENALTY_NONE) {
+  //       onFieldCnt += 1;
+  //       onFieldIdxs.push_back(i);
+  //     }
+
+  //     if (data->tmStatus[i].isAlive)
+  //       aliveCnt += 1;
+  //   }
+  //   ss << CYAN_CODE << "COM: " << "\n";
+  //   ss << "Teammates: OnField: " << onFieldCnt << "[";
+  //   for (int i = 0; i < onFieldIdxs.size(); i++) {
+  //     int idx = onFieldIdxs[i];
+  //     ss << " P" << idx + 1 << " ";
+  //   }
+  //   ss << "]";
+  //   ss << "  Alive: " << aliveCnt << "  TMCMDID: " << data->tmCmdId
+  //      << "  ReceivedDMD: " << data->tmReceivedCmd << "\n";
+
+  //   // Self info
+  //   ss << "Self\tCost: " << format("%.1f", data->tmMyCost) << "\tLead: ";
+  //   if (data->tmImLead)
+  //     ss << GREEN_CODE << "YES" << CYAN_CODE;
+  //   else
+  //     ss << RED_CODE << "NO" << CYAN_CODE;
+  //   ss << "    TMCMD: " << data->tmCmdId
+  //      << format("\tCMD: [%d]%d", data->tmMyCmdId, data->tmMyCmd);
+  //   ss << "\n";
+
+  //   // Teammates info
+  //   for (int i = 0; i < onFieldIdxs.size(); i++) {
+  //     int idx = onFieldIdxs[i];
+  //     auto status = data->tmStatus[idx];
+  //     ss << "P" << idx + 1 << "[";
+  //     if (status.isAlive)
+  //       ss << GREEN_CODE << "★" << CYAN_CODE;
+  //     else
+  //       ss << RED_CODE << "☆" << CYAN_CODE;
+  //     ss << "]\tCost: " << format("%.1f", status.cost);
+  //     ss << "\tLead: ";
+  //     if (status.isLead)
+  //       ss << GREEN_CODE << "YES" << CYAN_CODE;
+  //     else
+  //       ss << RED_CODE << "NO" << CYAN_CODE;
+  //     ss << "\tCMD: " << format("[%d]%d", status.cmdId, status.cmd);
+  //     ss << "\tLag: " << format("%.0f", msecsSince(status.timeLastCom)) <<
+  //     "ms"
+  //        << "\n";
+  //   }
+  //   ss << "\n";
+
+  //   return ss.str();
+  // }
+
+  bool Brain::isFreekickStartPlacing() {
+    return (tree->getEntry<string>("gc_game_sub_state_type") == "FREE_KICK" &&
+            tree->getEntry<string>("gc_game_state") == "PLAY" &&
+            tree->getEntry<string>("gc_game_sub_state") == "GET_READY");
+  }
+
+  // void Brain::playSoundForFun() {
+  //   string soundPack = config->soundPack;
+  //   if (config->soundEnable && soundPack != "espeak") {
+  //     static string gcGameState_last;
+  //     string gcGameState = tree->getEntry<string>("gc_game_state");
+
+  //     static bool gameStarted = false;
+  //     if (gcGameState == "PLAY")
+  //       gameStarted = true;
+  //     if (gcGameState == "READY") {
+  //       if (!gameStarted)
+  //         playSound(soundPack + "-ready", 2000);
+  //       else if (tree->getEntry<bool>("we_just_scored"))
+  //         playSound(soundPack + "-celebrate", 2000);
+  //       else
+  //         playSound(soundPack + "-regret", 2000);
+  //     }
+
+  //     if (gcGameState == "PLAY") {
+  //       auto decision = tree->getEntry<string>("decision");
+  //       if (decision == "chase")
+  //         playSound(soundPack + "-chase", 5000);
+  //       else if (decision == "adjust")
+  //         playSound(soundPack + "-adjust", 2000);
+  //       else if (decision == "kick")
+  //         playSound(soundPack + "-kick", 2000);
+  //     }
+  //   }
+  // }
