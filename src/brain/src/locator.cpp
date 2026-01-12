@@ -311,7 +311,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     sqSum += p.weight * p.weight;
   double ess = 1.0 / (sqSum + 1e-9);
 
-  if (ess < pfParticles.size() * 0.1) {
+  if (ess < pfParticles.size() * 0.5) {
     vector<Particle> newParticles;
     newParticles.reserve(pfParticles.size());
     int M = pfParticles.size();

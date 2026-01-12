@@ -75,7 +75,7 @@ def generate_launch_description():
         # 需要可以通过 ros2 launch brain launch.py param:=value 形式提供的参数, 需要在这里用 DeclarelaunchArgument 声明, 然后在 handle_configuration 处理
         DeclareLaunchArgument(
             'tree', 
-            default_value='game.xml',
+            default_value='test.xml',
             description='Specify behavior tree file name. DO NOT include full path, file should be in src/brain/config/behavior_trees'
         ),
         DeclareLaunchArgument(
