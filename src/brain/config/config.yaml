@@ -1,9 +1,9 @@
 brain_node:
   ros__parameters:
     game:
-      team_id: 29 # must be consistant with GameControl
+      team_id: 13 # must be consistant with GameControl
       player_id: 1 # 1 | 2 | 3 | 4 | 5
-      field_type: "adult_size" # adult_size | kid_size | robo_league
+      field_type: "kid_size" # adult_size | kid_size | robo_league
       player_role: "striker" # striker | goal_keeper
       treat_person_as_robot: false 
       number_of_players: 3
@@ -102,7 +102,7 @@ brain_node:
         cam_fov_y: 42.5 # 相机视场角, 单位: 度, d-robotics
         # TODO 相机参数以及点云处理, 未来应该转移到 vision 模块中. 或使 vision 模块发送 TF 消息.
     
-    game_control_ip: "127.0.0.1"
+    game_control_ip: "191.168.50.167"
 
     # for fun and debug
     sound:
