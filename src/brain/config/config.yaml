@@ -72,7 +72,7 @@ brain_node:
 
     rerunLog:
       enable_tcp: true 
-      server_ip: "192.168.10.136:9876"
+      server_ip: "192.168.50.136:9876"
       enable_file: true 
       log_dir: "/home/booster/Workspace/rrlog"
       max_log_file_mins: 5.0 
@@ -102,7 +102,7 @@ brain_node:
         cam_fov_y: 42.5 # 相机视场角, 单位: 度, d-robotics
         # TODO 相机参数以及点云处理, 未来应该转移到 vision 模块中. 或使 vision 模块发送 TF 消息.
     
-    game_control_ip: "191.168.50.167"
+    game_control_ip: "192.168.50.167"
 
     # for fun and debug
     sound:
