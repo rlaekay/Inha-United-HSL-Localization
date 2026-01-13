@@ -8,6 +8,9 @@ BrainLog::BrainLog(Brain *argBrain) : brain(argBrain), recorder("robocup") {
   enable_log_tcp = brain->config->rerunLogEnableTCP;
   enable_log_file = brain->config->rerunLogEnableFile;
   if (enable_log_tcp) {
+    std::cout << "[DEBUG] Connecting Rerun to: "
+              << brain->config->rerunLogServerIP << std::endl; // <--- ADD THIS
+
     rerun::Error err = recorder.connect(brain->config->rerunLogServerIP);
     if (err.is_err())
       prtErr("Connect rerunLog server failed: " + err.description);
