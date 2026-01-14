@@ -58,11 +58,11 @@ public:
 
     // 调用后, 会将 log stream 到新的文件, 以防止 log 文件过大, 无法读取.
     void updateLogFilePath();
+    rerun::RecordingStream log_tcp;
+    rerun::RecordingStream log_file;
 
 private:
     Brain *brain;
     bool enable_log_tcp = false;
     bool enable_log_file = false;
-    rerun::RecordingStream log_tcp;
-    rerun::RecordingStream log_file;
 };
