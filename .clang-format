@@ -1,0 +1,26 @@
+BasedOnStyle: LLVM
+
+# 한 줄 최대 길이 크게
+ColumnLimit: 160
+
+# 함수 호출 인자 웬만하면 한 줄
+BinPackArguments: true
+BinPackParameters: true
+
+# 짧은 구문은 한 줄 허용
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: true
+AllowShortBlocksOnASingleLine: Always
+
+# 생성자 / initializer 줄바꿈 억제
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: CurrentLine
+
+# { } 줄바꿈 최소화
+BreakBeforeBraces: Attach
+
+# 괄호 안 줄바꿈 억제
+PenaltyBreakBeforeFirstCallParameter: 1000000
+PenaltyBreakAssignment: 1000000
+PenaltyBreakString: 1000000
+PenaltyBreakComment: 1000000
