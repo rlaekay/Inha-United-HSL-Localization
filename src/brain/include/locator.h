@@ -27,7 +27,7 @@ public:
   double numShrinkRatio = 0.85;
   double offsetShrinkRatio = 0.8;
   int minMarkerCnt = 3;
-  double enableLog = false;
+  double enableLog = true;
   string logIP = "127.0.0.1:9876";
 
   rerun::RecordingStream log = rerun::RecordingStream("locator", "locator");

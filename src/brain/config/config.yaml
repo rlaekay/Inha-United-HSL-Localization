@@ -65,10 +65,10 @@ brain_node:
       num_particles: 250
       init_field_margin: 0.5
       pf_sensor_noise: 0.8
-      pf_alpha_1: 0.07
-      pf_alpha_2: 0.035
-      pf_alpha_3: 0.035
-      pf_alpha_4: 0.009
+      pf_alpha_1: 0.15
+      pf_alpha_2: 0.05
+      pf_alpha_3: 0.05
+      pf_alpha_4: 0.15
 
 
     enable_com: false 

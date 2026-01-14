@@ -151,7 +151,7 @@ void Brain::init() {
   client = std::make_shared<RobotClient>(this);
   communication = std::make_shared<BrainCommunication>(this);
 
-  locator->init(config->fieldDimensions, config->pfMinMarkerCnt, config->pfMaxResidual);
+  locator->init(config->fieldDimensions, config->pfMinMarkerCnt, config->pfMaxResidual, 2.0, config->rerunLogEnableTCP || config->rerunLogEnableFile);
   locator->setPFParams(config->pfNumParticles, config->pfInitFieldMargin, config->pfInitOwnHalfOnly, config->pfSensorNoise,
                        {config->pfAlpha1, config->pfAlpha2, config->pfAlpha3, config->pfAlpha4}, config->pfAlphaSlow, config->pfAlphaFast,
                        config->pfInjectionRatio);
