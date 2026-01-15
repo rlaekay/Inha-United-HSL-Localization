@@ -61,18 +61,18 @@ brain_node:
       pf_alpha_slow: 0.05
       pf_alpha_fast: 0.5
 
-      pf_zeromotion_trans_thresh: 0.1
-      pf_zeromotion_rot_thresh: 0.1
+      pf_zeromotion_trans_thresh: 0.001
+      pf_zeromotion_rot_thresh: 0.01
       pf_resample_when_stopped: false
 
 
-      num_particles: 150
+      num_particles: 180
       init_field_margin: 0.5
-      pf_sensor_noise: 0.8
-      pf_alpha_1: 0.1 #rot -> rot
+      pf_sensor_noise: 0.56
+      pf_alpha_1: 0.05 #rot -> rot
       pf_alpha_2: 0.009 #rot -> trans 
-      pf_alpha_3: 0.01 # trans-> rot
-      pf_alpha_4: 0.009 #trans->trans
+      pf_alpha_3: 0.001 # trans-> rot
+      pf_alpha_4: 0.001 #trans->trans
 
 
     enable_com: false 
