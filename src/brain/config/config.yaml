@@ -57,12 +57,15 @@ brain_node:
       min_marker_count: 5
       max_residual: 0.35 
       init_own_half_only: true
+      pf_cluster_dist_gate: 0.3
+      pf_cluster_theta_gate: 20.0 #degree
+      pf_smooth_alpha: 0.6
       pf_injection_ratio: 0.2
       pf_alpha_slow: 0.05
       pf_alpha_fast: 0.5
 
       pf_zeromotion_trans_thresh: 0.001
-      pf_zeromotion_rot_thresh: 0.01
+      pf_zeromotion_rot_thresh: 0.01 # 라디안
       pf_resample_when_stopped: false
 
 

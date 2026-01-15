@@ -62,7 +62,8 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 }
 
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
-                          double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped) {
+                          double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
+                          double clusterThetaThr, double smoothAlpha) {
   pfNumParticles = numParticles;
   pfInitFieldMargin = initMargin;
   pfInitOwnHalfOnly = ownHalf;
@@ -79,6 +80,10 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   pfZeroMotionTransThresh = zeroMotionTransThresh;
   pfZeroMotionRotThresh = zeroMotionRotThresh;
   pfResampleWhenStopped = resampleWhenStopped;
+
+  pfClusterDistThr = clusterDistThr;
+  pfClusterThetaThr = clusterThetaThr;
+  pfSmoothAlpha = smoothAlpha;
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
@@ -97,7 +102,7 @@ void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualTol
 
 void Locator::globalInitPF(Pose2D currentOdom) {
   double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-  double xMax = pfInitFieldMargin;
+  double xMax = pfInitOwnHalfOnly ? pfInitFieldMargin : (fieldDimensions.length / 2.0 + pfInitFieldMargin);
   double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
   double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
   double thetaMin = -M_PI;
@@ -129,6 +134,8 @@ void Locator::globalInitPF(Pose2D currentOdom) {
   // Reset Augmented MCL weights
   w_slow = 0.0;
   w_fast = 0.0;
+
+  hasSmoothedPose = false;
 }
 
 void Locator::predictPF(Pose2D currentOdomPose) {
@@ -235,7 +242,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
   // --- Augmented MCL: Update w_slow and w_fast ---
   // DISABLED by user request; favoring pure localization from good init
   // To re-enable, uncomment the injection logic below.
-  double p_inject = 0.05;
+  double p_inject = 0.1;
   /*
   if (w_slow == 0.0)
     w_slow = avgWeight;
@@ -311,10 +318,11 @@ Pose2D Locator::getEstimatePF() {
     double sinSum = 0;
     double leaderX = 0;
     double leaderY = 0;
+    double leaderTheta = 0; // Added leaderTheta
   };
 
   std::vector<Cluster> clusters;
-  const double CLUSTER_DIST_THR = 0.5;
+  // const double CLUSTER_DIST_THR = 0.3; // Replaced by pfClusterDistThr
 
   // Sort indices by weight descending to use high-weight particles as cluster seeds
   std::vector<int> sortedIndices(pfParticles.size());
@@ -326,8 +334,12 @@ Pose2D Locator::getEstimatePF() {
     auto &p = pfParticles[idx];
     bool added = false;
     for (auto &c : clusters) {
+      // Distance check
       double d = std::hypot(p.x - c.leaderX, p.y - c.leaderY);
-      if (d < CLUSTER_DIST_THR) {
+      // Theta check (Theta Gate)
+      double dTheta = std::fabs(toPInPI(p.theta - c.leaderTheta));
+
+      if (d < pfClusterDistThr && dTheta < pfClusterThetaThr) {
         c.totalWeight += p.weight;
         c.xSum += p.x * p.weight;
         c.ySum += p.y * p.weight;
@@ -343,9 +355,10 @@ Pose2D Locator::getEstimatePF() {
       c.xSum = p.x * p.weight;
       c.ySum = p.y * p.weight;
       c.cosSum = cos(p.theta) * p.weight;
-      c.sinSum = sin(p.theta) * p.weight;
+      c.sinSum += sin(p.theta) * p.weight;
       c.leaderX = p.x;
       c.leaderY = p.y;
+      c.leaderTheta = p.theta; // Initialize leaderTheta
       clusters.push_back(c);
     }
   }
@@ -364,10 +377,29 @@ Pose2D Locator::getEstimatePF() {
   if (bestClusterIdx == -1) return {0, 0, 0};
 
   // 4. Pose = average of that cluster
+  Pose2D rawEstPose;
   auto &bestC = clusters[bestClusterIdx];
-  if (bestC.totalWeight > 0) { return Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)}; }
+  if (bestC.totalWeight > 0) {
+    rawEstPose = Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)};
+  } else {
+    rawEstPose = Pose2D{bestC.leaderX, bestC.leaderY, bestC.leaderTheta};
+  }
 
-  return {bestC.leaderX, bestC.leaderY, 0.0};
+  // 5. Exponential Moving Average (EMA) Smoothing
+  if (!hasSmoothedPose) {
+    smoothedPose = rawEstPose;
+    hasSmoothedPose = true;
+  } else {
+    // Smooth X
+    smoothedPose.x = pfSmoothAlpha * rawEstPose.x + (1.0 - pfSmoothAlpha) * smoothedPose.x;
+    // Smooth Y
+    smoothedPose.y = pfSmoothAlpha * rawEstPose.y + (1.0 - pfSmoothAlpha) * smoothedPose.y;
+    // Smooth Theta (handle angle wrapping)
+    double diffTheta = toPInPI(rawEstPose.theta - smoothedPose.theta);
+    smoothedPose.theta = toPInPI(smoothedPose.theta + pfSmoothAlpha * diffTheta);
+  }
+
+  return smoothedPose;
 }
 
 // Locator::setLog implementation

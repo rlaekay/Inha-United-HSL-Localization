@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Eigen/Core>
 #include <ostream>
 #include <string>
 
@@ -100,6 +101,10 @@ public:
   double pfZeroMotionTransThresh = 0.001;
   double pfZeroMotionRotThresh = 0.002;
   bool pfResampleWhenStopped = false;
+
+  double pfClusterDistThr = 0.3;
+  double pfClusterThetaThr = 0.35; // ~20 deg
+  double pfSmoothAlpha = 0.4;
 
   bool soundEnable = false;
   string soundPack = "espeak";

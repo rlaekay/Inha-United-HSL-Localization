@@ -134,10 +134,13 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.pf_alpha_4", 0.01);
   declare_parameter<double>("locator.pf_alpha_slow", 0.05);
   declare_parameter<double>("locator.pf_alpha_fast", 0.5);
-  declare_parameter<double>("locator.pf_injection_ratio", 0.2);
   declare_parameter<double>("locator.pf_zeromotion_trans_thresh", 0.001);
   declare_parameter<double>("locator.pf_zeromotion_rot_thresh", 0.002);
   declare_parameter<bool>("locator.pf_resample_when_stopped", false);
+
+  declare_parameter<double>("locator.pf_cluster_dist_gate", 0.3);
+  declare_parameter<double>("locator.pf_cluster_theta_gate", 20.0);
+  declare_parameter<double>("locator.pf_smooth_alpha", 0.4);
 }
 
 Brain::~Brain() {}
@@ -157,7 +160,8 @@ void Brain::init() {
   locator->init(config->fieldDimensions, config->pfMinMarkerCnt, config->pfMaxResidual, 2.0, config->rerunLogEnableTCP || config->rerunLogEnableFile);
   locator->setPFParams(config->pfNumParticles, config->pfInitFieldMargin, config->pfInitOwnHalfOnly, config->pfSensorNoise,
                        {config->pfAlpha1, config->pfAlpha2, config->pfAlpha3, config->pfAlpha4}, config->pfAlphaSlow, config->pfAlphaFast,
-                       config->pfInjectionRatio, config->pfZeroMotionTransThresh, config->pfZeroMotionRotThresh, config->pfResampleWhenStopped);
+                       config->pfInjectionRatio, config->pfZeroMotionTransThresh, config->pfZeroMotionRotThresh, config->pfResampleWhenStopped,
+                       config->pfClusterDistThr, config->pfClusterThetaThr, config->pfSmoothAlpha);
 
   locator->setLog(&log->log_tcp);
 
@@ -282,6 +286,12 @@ void Brain::loadConfig() {
   get_parameter("locator.pf_zeromotion_trans_thresh", config->pfZeroMotionTransThresh);
   get_parameter("locator.pf_zeromotion_rot_thresh", config->pfZeroMotionRotThresh);
   get_parameter("locator.pf_resample_when_stopped", config->pfResampleWhenStopped);
+
+  get_parameter("locator.pf_cluster_dist_gate", config->pfClusterDistThr);
+  double clusterThetaDeg;
+  get_parameter("locator.pf_cluster_theta_gate", clusterThetaDeg);
+  config->pfClusterThetaThr = deg2rad(clusterThetaDeg);
+  get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
 
   // else
   YAML::Node vConfig = YAML::LoadFile(visionConfigPath);

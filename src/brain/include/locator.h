@@ -106,18 +106,27 @@ public:
   double pfInitFieldMargin = 1.0;
   bool pfInitOwnHalfOnly = true;
 
-  double pfAlpha1 = 0.08; //rot -> rot
-  double pfAlpha2 = 0.005; //rot -> trans
-  double pfAlpha3 = 0.005; //trans -> rot
-  double pfAlpha4 = 0.005; //trans -> trans
+  double pfAlpha1 = 0.08;  // rot -> rot
+  double pfAlpha2 = 0.005; // rot -> trans
+  double pfAlpha3 = 0.005; // trans -> rot
+  double pfAlpha4 = 0.005; // trans -> trans
 
   double pfZeroMotionTransThresh = 0.01;
   double pfZeroMotionRotThresh = 0.03;
   bool pfResampleWhenStopped = false;
   bool isRobotMoving = true;
 
+  double pfClusterDistThr = 0.3;
+  double pfClusterThetaThr = 0.35; // ~20 deg
+  double pfSmoothAlpha = 0.4;
+
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
-                   double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false);
+                   double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
+                   double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4);
+
+  // Pose Smoothing
+  Pose2D smoothedPose = {0, 0, 0};
+  bool hasSmoothedPose = false;
 };
 
 class Brain;
