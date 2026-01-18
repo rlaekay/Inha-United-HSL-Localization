@@ -35,20 +35,7 @@ void BrainConfig::calcMapLines() {
   rightTouchLine.side = LineSide::Right;
   rightTouchLine.dir = LineDir::Vertical;
   rightTouchLine.type = LineType::TouchLine;
-  get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
 
-  get_parameter("locator.kld_err", config->kldErr);
-  get_parameter("locator.kld_z", config->kldZ);
-  get_parameter("locator.min_particles", config->minParticles);
-  get_parameter("locator.max_particles", config->maxParticles);
-
-  double resX, resY, resThetaDeg;
-  get_parameter("locator.pf_resolution_x", resX);
-  config->pfResolutionX = resX;
-  get_parameter("locator.pf_resolution_y", resY);
-  config->pfResolutionY = resY;
-  get_parameter("locator.pf_resolution_theta", resThetaDeg);
-  config->pfResolutionTheta = deg2rad(resThetaDeg);
 
   mapLines.push_back(rightTouchLine);
 

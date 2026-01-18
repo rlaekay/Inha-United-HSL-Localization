@@ -76,7 +76,7 @@ public:
   double goalPostMargin = 0.4;
   double goalPostMarginForTouch = 0.1;
   double ballConfidenceThreshold;
-  bool treatPersonAsRobot = false;
+  bool treatPersonAsRobot = false;   
   double ballOutThreshold = 2.0;
   double tmBallDistThreshold = 4.0;
   bool limitNearBallSpeed = true;
@@ -104,8 +104,7 @@ public:
 
   double pfClusterDistThr = 0.3;
   double pfClusterThetaThr = 0.35; // ~20 deg
-  double pfClusterDistThr = 0.3;
-  double pfClusterThetaThr = 0.35; // ~20 deg
+
   double pfSmoothAlpha = 0.4;
 
   // KLD Sampling Parameters
