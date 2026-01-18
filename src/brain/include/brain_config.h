@@ -104,7 +104,19 @@ public:
 
   double pfClusterDistThr = 0.3;
   double pfClusterThetaThr = 0.35; // ~20 deg
+  double pfClusterDistThr = 0.3;
+  double pfClusterThetaThr = 0.35; // ~20 deg
   double pfSmoothAlpha = 0.4;
+
+  // KLD Sampling Parameters
+  double kldErr = 0.05;
+  double kldZ = 2.33; // 99% confidence (1-delta)
+  int minParticles = 50;
+  int maxParticles = 500;
+  // Resolution for binning
+  double pfResolutionX = 0.2;             // 20cm
+  double pfResolutionY = 0.2;             // 20cm
+  double pfResolutionTheta = deg2rad(10); // 10 deg
 
   bool soundEnable = false;
   string soundPack = "espeak";

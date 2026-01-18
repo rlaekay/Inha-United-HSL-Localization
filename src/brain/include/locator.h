@@ -13,6 +13,7 @@
 
 #include "types.h"
 
+#include <map>
 #include <string>
 
 using namespace std;
@@ -32,6 +33,9 @@ public:
 
   rerun::RecordingStream log = rerun::RecordingStream("locator", "locator");
   vector<FieldMarker> fieldMarkers;
+  // Pre-categorized markers
+  map<char, vector<FieldMarker>> mapByType;
+
   FieldDimensions fieldDimensions;
   Eigen::ArrayXXd hypos;
   PoseBox2D constraints;
@@ -120,9 +124,19 @@ public:
   double pfClusterThetaThr = 0.35; // ~20 deg
   double pfSmoothAlpha = 0.4;
 
+  // KLD State
+  double kldErr = 0.05;
+  double kldZ = 2.33;
+  int minParticles = 50;
+  int maxParticles = 500;
+  double pfResolutionX = 0.2;
+  double pfResolutionY = 0.2;
+  double pfResolutionTheta = 10.0 * M_PI / 180.0;
+
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                    double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
-                   double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4);
+                   double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4, double kldErr = 0.05, double kldZ = 2.33,
+                   int minParticles = 50, int maxParticles = 500, double resX = 0.2, double resY = 0.2, double resTheta = 0.17);
 
   // Pose Smoothing
   Pose2D smoothedPose = {0, 0, 0};

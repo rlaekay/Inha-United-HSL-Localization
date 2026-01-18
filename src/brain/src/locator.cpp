@@ -1,10 +1,13 @@
 #include "locator.h"
 #include "brain.h"
 #include "brain_tree.h"
+#include "utils/hungarian.h"
 #include "utils/math.h"
 #include "utils/misc.h"
 #include "utils/print.h"
+#include <map>
 #include <random>
+#include <set>
 
 #define REGISTER_LOCATOR_BUILDER(Name)                                                                                                                         \
   factory.registerBuilder<Name>(#Name, [brain](const string &name, const NodeConfig &config) { return make_unique<Name>(name, config, brain); });
@@ -28,11 +31,13 @@ void RegisterLocatorNodes(BT::BehaviorTreeFactory &factory, Brain *brain) {
 
 void Locator::calcFieldMarkers(FieldDimensions fd) {
 
+  fieldMarkers.push_back(FieldMarker{'X', 0.0, 0.0, 0.0});
+
   fieldMarkers.push_back(FieldMarker{'X', 0.0, -fd.circleRadius, 0.0});
   fieldMarkers.push_back(FieldMarker{'X', 0.0, fd.circleRadius, 0.0});
 
-  fieldMarkers.push_back(FieldMarker{'P', fd.length / 2 - fd.penaltyDist, 0.0, 0.0});
-  fieldMarkers.push_back(FieldMarker{'P', -fd.length / 2 + fd.penaltyDist, 0.0, 0.0});
+  fieldMarkers.push_back(FieldMarker{'X', fd.length / 2 - fd.penaltyDist, 0.0, 0.0});
+  fieldMarkers.push_back(FieldMarker{'X', -fd.length / 2 + fd.penaltyDist, 0.0, 0.0});
 
   fieldMarkers.push_back(FieldMarker{'T', 0.0, fd.width / 2, 0.0});
   fieldMarkers.push_back(FieldMarker{'T', 0.0, -fd.width / 2, 0.0});
@@ -59,31 +64,43 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
   fieldMarkers.push_back(FieldMarker{'L', fd.length / 2, -fd.width / 2, 0.0});
   fieldMarkers.push_back(FieldMarker{'L', -fd.length / 2, fd.width / 2, 0.0});
   fieldMarkers.push_back(FieldMarker{'L', -fd.length / 2, -fd.width / 2, 0.0});
+
+  // Update mapByType cache
+  mapByType.clear();
+  for (auto &m : fieldMarkers) {
+    mapByType[m.type].push_back(m);
+  }
 }
 
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
-                          double clusterThetaThr, double smoothAlpha) {
-  pfNumParticles = numParticles;
-  pfInitFieldMargin = initMargin;
-  pfInitOwnHalfOnly = ownHalf;
-  pfSensorNoiseR = sensorNoise;
-  if (alphas.size() >= 4) {
-    pfAlpha1 = alphas[0];
-    pfAlpha2 = alphas[1];
-    pfAlpha3 = alphas[2];
-    pfAlpha4 = alphas[3];
-  }
-  alpha_slow = alphaSlow;
-  alpha_fast = alphaFast;
-  pfInjectionRatio = injectionRatio;
-  pfZeroMotionTransThresh = zeroMotionTransThresh;
-  pfZeroMotionRotThresh = zeroMotionRotThresh;
-  pfResampleWhenStopped = resampleWhenStopped;
+                          double clusterThetaThr, double smoothAlpha, double kldErr, double kldZ, int minParticles, int maxParticles, double resX, double resY,
+                          double resTheta) {
+  this->pfNumParticles = numParticles;
+  this->pfInitFieldMargin = initMargin;
+  this->pfInitOwnHalfOnly = ownHalf;
+  this->pfSensorNoiseR = sensorNoise;
+  this->pfAlpha1 = alphas[0];
+  this->pfAlpha2 = alphas[1];
+  this->pfAlpha3 = alphas[2];
+  this->pfAlpha4 = alphas[3];
+  this->alpha_slow = alphaSlow;
+  this->alpha_fast = alphaFast;
+  this->pfInjectionRatio = injectionRatio;
+  this->pfZeroMotionTransThresh = zeroMotionTransThresh;
+  this->pfZeroMotionRotThresh = zeroMotionRotThresh;
+  this->pfResampleWhenStopped = resampleWhenStopped;
+  this->pfClusterDistThr = clusterDistThr;
+  this->pfClusterThetaThr = clusterThetaThr;
+  this->pfSmoothAlpha = smoothAlpha;
 
-  pfClusterDistThr = clusterDistThr;
-  pfClusterThetaThr = clusterThetaThr;
-  pfSmoothAlpha = smoothAlpha;
+  this->kldErr = kldErr;
+  this->kldZ = kldZ;
+  this->minParticles = minParticles;
+  this->maxParticles = maxParticles;
+  this->pfResolutionX = resX;
+  this->pfResolutionY = resY;
+  this->pfResolutionTheta = resTheta;
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
@@ -102,7 +119,7 @@ void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualTol
 
 void Locator::globalInitPF(Pose2D currentOdom) {
   double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-  double xMax = pfInitOwnHalfOnly ? pfInitFieldMargin : (fieldDimensions.length / 2.0 + pfInitFieldMargin);
+  double xMax = pfInitFieldMargin;
   double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
   double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
   double thetaMin = -M_PI;
@@ -145,6 +162,7 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   if (!isPFInitialized) {
     prtWarn("[PF][predictPF] NOT initialized -> only update lastPFOdomPose");
     lastPFOdomPose = currentOdomPose; // (0,0,0)에서 점프 방지
+    globalInitPF(currentOdomPose);
     return;
   }
 
@@ -156,10 +174,10 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double transDist = sqrt(dx * dx + dy * dy);
   double rotDist = fabs(dtheta);
 
-  if (transDist < pfZeroMotionTransThresh && rotDist < pfZeroMotionRotThresh) {
-    isRobotMoving = false;
-    return;
-  }
+  // if (transDist < pfZeroMotionTransThresh && rotDist < pfZeroMotionRotThresh) {
+  //   isRobotMoving = false;
+  //   return;
+  // }
   isRobotMoving = true;
 
   double c = cos(lastPFOdomPose.theta);
@@ -176,7 +194,7 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double alpha4 = pfAlpha4;
 
   for (auto &p : pfParticles) {
-    double n_rot1 = rot1 + (gaussianRandom(0, alpha1d * fabs(rot1) + alpha2 * trans));
+    double n_rot1 = rot1 + (gaussianRandom(0, alpha1 * fabs(rot1) + alpha2 * trans));
     double n_trans = trans + (gaussianRandom(0, alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2))));
     double n_rot2 = rot2 + (gaussianRandom(0, alpha1 * fabs(rot2) + alpha2 * trans));
 
@@ -199,6 +217,18 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
   double totalWeight = 0;
   double avgWeight = 0;
 
+  // Pre-categorize observations by type to avoid repeated looping
+  map<char, vector<FieldMarker>> obsByType;
+  for (auto &m : markers) {
+    obsByType[m.type].push_back(m);
+  }
+
+  // Pre-categorize field markers by type
+  // Optimization: This could be done once at init if fieldMarkers doesn't change,
+  // but it's small enough to do here for safety.
+
+  HungarianAlgorithm hungarian;
+
   // Weight Update
   for (auto &p : pfParticles) {
     // Check Boundary Constraints
@@ -212,11 +242,49 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     } else {
       Pose2D pose{p.x, p.y, p.theta};
       double logLikelihood = 0;
-      for (auto &m_r : markers) {
-        auto m_f = markerToFieldFrame(m_r, pose);
-        double dist = minDist(m_f);
-        logLikelihood += -(dist * dist) / (2 * sigma * sigma);
+
+      // Process each marker type independently
+      for (auto const &[type, obsList] : obsByType) {
+        // If map has no markers of this type, these obs are ghosts -> penalty?
+        // Current logic: ignore (or implicit penalty by not increasing probability)
+        if (mapByType.find(type) == mapByType.end()) continue;
+
+        const auto &mapList = mapByType[type];
+
+        // Construct Cost Matrix (Rows: Obs, Cols: Map)
+        int nObs = obsList.size();
+        int nMap = mapList.size();
+
+        // Transform all map markers to robot frame? Or obs to field frame?
+        // Old logic: markerToFieldFrame (obs -> field). Let's stick to that.
+        vector<FieldMarker> obsInField;
+        obsInField.reserve(nObs);
+        for (auto &m_r : obsList) {
+          obsInField.push_back(markerToFieldFrame(m_r, pose));
+        }
+
+        vector<vector<double>> costMatrix(nObs, vector<double>(nMap));
+        for (int i = 0; i < nObs; ++i) {
+          for (int j = 0; j < nMap; ++j) {
+            double dx = obsInField[i].x - mapList[j].x;
+            double dy = obsInField[i].y - mapList[j].y;
+            // Cost = Squared Distance
+            costMatrix[i][j] = dx * dx + dy * dy;
+          }
+        }
+
+        // Solve Assignment
+        vector<int> assignment;
+        double minTotalDistSq = hungarian.Solve(costMatrix, assignment);
+
+        // Update Likelihood
+        // cost is sum of dist^2 for optimal matches
+        // For unassigned observations (if nObs > nMap), they are NOT included in cost.
+        // We might want to add a penalty for unassigned observations?
+        // For now, sticking to "sum of matches" to be safe.
+        logLikelihood += -minTotalDistSq / (2 * sigma * sigma);
       }
+
       double likelihood = exp(logLikelihood);
       p.weight *= likelihood;
     }
@@ -234,67 +302,95 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
       p.weight /= totalWeight;
   }
 
-  // --- Augmented MCL: Update w_slow and w_fast ---
-  // DISABLED by user request; favoring pure localization from good init
-  // To re-enable, uncomment the injection logic below.
   double p_inject = 0.1;
-  /*
-  if (w_slow == 0.0)
-    w_slow = avgWeight;
-  else
-    w_slow += alpha_slow * (avgWeight - w_slow);
-  if (w_fast == 0.0)
-    w_fast = avgWeight;
-  else
-    w_fast += alpha_fast * (avgWeight - w_fast);
 
-  // Calculate injection probability
-  // Calculate injection probability
-  double w_diff = 1.0 - w_fast / w_slow;
-  p_inject = std::min(pfInjectionRatio, std::max(0.0, w_diff));
-  */
-
-  if (isRobotMoving || pfResampleWhenStopped) {
+  if (isRobotMoving || !pfResampleWhenStopped) {
     double sqSum = 0;
     for (auto &p : pfParticles)
       sqSum += p.weight * p.weight;
     double ess = 1.0 / (sqSum + 1e-9);
 
-    if (ess < pfParticles.size() * 0.3) {
+    if (ess < pfParticles.size() * 0.5) { // increased threshold slightly
       vector<Particle> newParticles;
-      newParticles.reserve(pfParticles.size());
-      int M = pfParticles.size();
-      double r = ((double)rand() / RAND_MAX) * (1.0 / M);
+      newParticles.reserve(maxParticles); // Reserve max to avoid realloc
+
+      // KLD Sampling Variables
+      // We need to track occupied bins
+      // using a set for sparsity, key = (x_idx, y_idx, th_idx)
+      // std::tuple is slow? let's use a long long key if indices fit
+      // x: +/- 10m / 0.2 = +/- 50 -> 100 bins
+      // y: +/- 7m / 0.2 = +/- 35 -> 70 bins
+      // th: 360 / 10 = 36 bins
+      // Key design: ((x + 100) * 1000 + (y + 100)) * 100 + th
+      auto getBinKey = [&](const Particle &p) -> long long {
+        int xi = (int)floor(p.x / pfResolutionX);
+        int yi = (int)floor(p.y / pfResolutionY);
+        int thi = (int)floor(p.theta / pfResolutionTheta);
+        // Offset indices to be positive for simpler keying (assuming field < 100m)
+        return ((long long)(xi + 500) * 1000 + (yi + 500)) * 100 + (thi + 100);
+      };
+
+      set<long long> occupiedBins;
+      int k = 0;                // num occupied bins
+      int M_chi = minParticles; // Initial target count
+      int M = 0;                // Current count
+
+      // Low Variance Sampling Setup
+      double r = ((double)rand() / RAND_MAX) * (1.0 / pfParticles.size()); // Assuming simplified LV
+      // Standard LV requires fixed size. For KLD we often use simple random sampling with probability prop to weight
+      // OR we can run LV over the old set and keep adding until we hit M_chi.
+      // Let's implement standard "pick proportional to weight" for KLD loop to be strictly correct with dynamic N.
+      // But LV is essentially a better version of that.
+      // We will perform a simplified LV where we cycle through the cumulative distribution.
+
       double c = pfParticles[0].weight;
-      int i = 0;
+      int i = 0;                              // index of old particle
+      double step = 1.0 / pfParticles.size(); // conceptual step size? No, we don't know N yet.
 
-      // for random injection
-      double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-      double xMax = pfInitOwnHalfOnly ? 1.0 : (fieldDimensions.length / 2.0 + pfInitFieldMargin);
-      double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
-      double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
+      // KLD Approach: we generate particles one by one until condition met
+      // It's often easier to just sample randomly with valid weights.
+      // Easiest robust impl: Construct CDF
+      vector<double> cdf(pfParticles.size());
+      cdf[0] = pfParticles[0].weight;
+      for (size_t j = 1; j < pfParticles.size(); ++j)
+        cdf[j] = cdf[j - 1] + pfParticles[j].weight;
 
-      for (int m = 0; m < M; m++) {
+      do {
+        // Select particle
+        double u = (double)rand() / RAND_MAX;
+        // Binary search for index
+        auto it = lower_bound(cdf.begin(), cdf.end(), u);
+        int idx = distance(cdf.begin(), it);
+        if (idx >= (int)pfParticles.size()) idx = pfParticles.size() - 1;
 
-        if (((double)rand() / RAND_MAX) < p_inject) {
-          Particle newP;
-          newP.x = xMin + ((double)rand() / RAND_MAX) * (xMax - xMin);
-          newP.y = yMin + ((double)rand() / RAND_MAX) * (yMax - yMin);
-          newP.theta = toPInPI(-M_PI + ((double)rand() / RAND_MAX) * 2 * M_PI);
-          newP.weight = 1.0 / M;
-          newParticles.push_back(newP);
-        } else {
-          // Low Variance Sampling
-          double u = r + (double)m / M;
-          while (u > c && i < M - 1) {
-            i++;
-            c += pfParticles[i].weight;
+        Particle newP = pfParticles[idx];
+
+        // Apply motion noise? No, this is resampling step. Motion noise is predict step.
+        // Applying minimal jitter? optional. Sticking to copy.
+
+        // Check bin
+        long long key = getBinKey(newP);
+        if (occupiedBins.find(key) == occupiedBins.end()) {
+          occupiedBins.insert(key);
+          k++;
+          // Recalculate M_chi
+          if (k > 1) {
+            // Wilson-Hilferty approximation
+            double z = kldZ;
+            double term = 1.0 - 2.0 / (9.0 * (k - 1)) + sqrt(2.0 / (9.0 * (k - 1))) * z;
+            M_chi = (int)ceil((k - 1) / (2.0 * kldErr) * term * term * term);
           }
-          Particle newP = pfParticles[i];
-          newP.weight = 1.0 / M;
-          newParticles.push_back(newP);
         }
-      }
+
+        newParticles.push_back(newP);
+        M++;
+
+      } while ((M < M_chi || M < minParticles) && M < maxParticles);
+
+      // Normalize weights for new set
+      for (auto &p : newParticles)
+        p.weight = 1.0 / M;
+
       pfParticles = newParticles;
     }
   }

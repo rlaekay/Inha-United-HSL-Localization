@@ -141,6 +141,14 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.pf_cluster_dist_gate", 0.3);
   declare_parameter<double>("locator.pf_cluster_theta_gate", 20.0);
   declare_parameter<double>("locator.pf_smooth_alpha", 0.4);
+
+  declare_parameter<double>("locator.kld_err", 0.05);
+  declare_parameter<double>("locator.kld_z", 2.33); // 99%
+  declare_parameter<int>("locator.min_particles", 50);
+  declare_parameter<int>("locator.max_particles", 500);
+  declare_parameter<double>("locator.pf_resolution_x", 0.2);
+  declare_parameter<double>("locator.pf_resolution_y", 0.2);
+  declare_parameter<double>("locator.pf_resolution_theta", 10.0);
 }
 
 Brain::~Brain() {}

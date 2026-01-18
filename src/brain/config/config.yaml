@@ -65,9 +65,9 @@ brain_node:
 
       pf_sensor_noise: 1.0 
 
-      pf_alpha_1: 0.01 #rot -> rot
+      pf_alpha_1: 0.1 #rot -> rot
       pf_alpha_2: 0.001 #trans -> rot
-      pf_alpha_3: 0.01 # trans-> trans
+      pf_alpha_3: 0.001 # trans-> trans
       pf_alpha_4: 0.01 #rot->trans
 
 
@@ -77,7 +77,7 @@ brain_node:
       pf_injection_ratio: 0.01
       pf_alpha_slow: 0.05
       pf_alpha_fast: 0.5
-      pf_resample_when_stopped: true
+      pf_resample_when_stopped: false
       num_particles: 180
       init_field_margin: 0.5
       
