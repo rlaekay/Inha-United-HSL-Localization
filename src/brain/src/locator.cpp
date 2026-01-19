@@ -373,12 +373,31 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     do {
       // Select particle
       double u = (double)rand() / RAND_MAX;
-      // Binary search for index
-      auto it = lower_bound(cdf.begin(), cdf.end(), u);
-      int idx = distance(cdf.begin(), it);
-      if (idx >= (int)pfParticles.size()) idx = pfParticles.size() - 1;
+      Particle newP;
 
-      Particle newP = pfParticles[idx];
+      double p_inject = this->pfInjectionRatio;
+      if (u < p_inject) {
+        // Injection: Random Global Particle
+        double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
+        double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
+        double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
+        double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
+
+        newP.x = xMin + ((double)rand() / RAND_MAX) * (xMax - xMin);
+        newP.y = yMin + ((double)rand() / RAND_MAX) * (yMax - yMin);
+        newP.theta = toPInPI(((double)rand() / RAND_MAX) * 2.0 * M_PI - M_PI);
+        newP.weight = 1.0; // Weight doesn't matter here, will be normalized later
+      } else {
+        // Standard Resampling
+        // Re-roll u since we used it for injection check?
+        // Or just normalize u range?
+        // Simpler: Just roll again for CDF selection
+        double u2 = (double)rand() / RAND_MAX;
+        auto it = lower_bound(cdf.begin(), cdf.end(), u2);
+        int idx = distance(cdf.begin(), it);
+        if (idx >= (int)pfParticles.size()) idx = pfParticles.size() - 1;
+        newP = pfParticles[idx];
+      }
 
       // Apply motion noise? No, this is resampling step. Motion noise is predict step.
       // Applying minimal jitter? optional. Sticking to copy.
