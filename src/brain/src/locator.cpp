@@ -161,9 +161,8 @@ void Locator::globalInitPF(Pose2D currentOdom) {
 
 void Locator::predictPF(Pose2D currentOdomPose) {
 
-  prtWarn(format("[PF][predictPF] enter | initialized=%d | pfN=%zu | "
-                 "odom=(%.2f %.2f %.2f)",
-                 isPFInitialized, pfParticles.size(), currentOdomPose.x, currentOdomPose.y, rad2deg(currentOdomPose.theta)));
+  prtWarn(format("[PF][predictPF] enter | initialized=%d | pfN=%zu | odom=(%.2f %.2f %.2f)", isPFInitialized, pfParticles.size(), currentOdomPose.x,
+                 currentOdomPose.y, rad2deg(currentOdomPose.theta)));
 
   if (!isPFInitialized) {
     prtWarn("[PF][predictPF] NOT initialized -> only update lastPFOdomPose");
@@ -176,15 +175,8 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double dy = currentOdomPose.y - lastPFOdomPose.y;
   double dtheta = toPInPI(currentOdomPose.theta - lastPFOdomPose.theta);
 
-  // Zero Motion Gate
   double transDist = sqrt(dx * dx + dy * dy);
   double rotDist = fabs(dtheta);
-
-  // if (transDist < pfZeroMotionTransThresh && rotDist < pfZeroMotionRotThresh) {
-  //   isRobotMoving = false;
-  //   return;
-  // }
-  isRobotMoving = true;
 
   double c = cos(lastPFOdomPose.theta);
   double s = sin(lastPFOdomPose.theta);
@@ -263,17 +255,35 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
 
         // Transform all map markers to robot frame? Or obs to field frame?
         // Old logic: markerToFieldFrame (obs -> field). Let's stick to that.
-        vector<FieldMarker> obsInField;
-        obsInField.reserve(nObs);
+        vector<FieldMarker> validObsInField;
+        validObsInField.reserve(nObs);
+        double gateDistSq = 3.0 * 3.0; // 3m gating
+
         for (auto &m_r : obsList) {
-          obsInField.push_back(markerToFieldFrame(m_r, pose));
+          FieldMarker m_f = markerToFieldFrame(m_r, pose);
+
+          // Check distance to nearest map marker of same type
+          bool inRange = false;
+          for (const auto &mapM : mapList) {
+            double dx = m_f.x - mapM.x;
+            double dy = m_f.y - mapM.y;
+            if (dx * dx + dy * dy <= gateDistSq) {
+              inRange = true;
+              break;
+            }
+          }
+
+          if (inRange) { validObsInField.push_back(m_f); }
         }
 
-        vector<vector<double>> costMatrix(nObs, vector<double>(nMap));
-        for (int i = 0; i < nObs; ++i) {
+        int nValidObs = validObsInField.size();
+        if (nValidObs == 0) continue;
+
+        vector<vector<double>> costMatrix(nValidObs, vector<double>(nMap));
+        for (int i = 0; i < nValidObs; ++i) {
           for (int j = 0; j < nMap; ++j) {
-            double dx = obsInField[i].x - mapList[j].x;
-            double dy = obsInField[i].y - mapList[j].y;
+            double dx = validObsInField[i].x - mapList[j].x;
+            double dy = validObsInField[i].y - mapList[j].y;
             // Cost = Squared Distance
             costMatrix[i][j] = dx * dx + dy * dy;
           }
@@ -310,95 +320,93 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
 
   double p_inject = 0.1;
 
-  if (isRobotMoving || !pfResampleWhenStopped) {
-    double sqSum = 0;
-    for (auto &p : pfParticles)
-      sqSum += p.weight * p.weight;
-    double ess = 1.0 / (sqSum + 1e-9);
+  double sqSum = 0;
+  for (auto &p : pfParticles)
+    sqSum += p.weight * p.weight;
+  double ess = 1.0 / (sqSum + 1e-9);
 
-    if (ess < pfParticles.size() * 0.5) { // increased threshold slightly
-      vector<Particle> newParticles;
-      newParticles.reserve(maxParticles); // Reserve max to avoid realloc
+  if (ess < pfParticles.size() * 0.5) { // increased threshold slightly
+    vector<Particle> newParticles;
+    newParticles.reserve(maxParticles); // Reserve max to avoid realloc
 
-      // KLD Sampling Variables
-      // We need to track occupied bins
-      // using a set for sparsity, key = (x_idx, y_idx, th_idx)
-      // std::tuple is slow? let's use a long long key if indices fit
-      // x: +/- 10m / 0.2 = +/- 50 -> 100 bins
-      // y: +/- 7m / 0.2 = +/- 35 -> 70 bins
-      // th: 360 / 10 = 36 bins
-      // Key design: ((x + 100) * 1000 + (y + 100)) * 100 + th
-      auto getBinKey = [&](const Particle &p) -> long long {
-        int xi = (int)floor(p.x / pfResolutionX);
-        int yi = (int)floor(p.y / pfResolutionY);
-        int thi = (int)floor(p.theta / pfResolutionTheta);
-        // Offset indices to be positive for simpler keying (assuming field < 100m)
-        return ((long long)(xi + 500) * 1000 + (yi + 500)) * 100 + (thi + 100);
-      };
+    // KLD Sampling Variables
+    // We need to track occupied bins
+    // using a set for sparsity, key = (x_idx, y_idx, th_idx)
+    // std::tuple is slow? let's use a long long key if indices fit
+    // x: +/- 10m / 0.2 = +/- 50 -> 100 bins
+    // y: +/- 7m / 0.2 = +/- 35 -> 70 bins
+    // th: 360 / 10 = 36 bins
+    // Key design: ((x + 100) * 1000 + (y + 100)) * 100 + th
+    auto getBinKey = [&](const Particle &p) -> long long {
+      int xi = (int)floor(p.x / pfResolutionX);
+      int yi = (int)floor(p.y / pfResolutionY);
+      int thi = (int)floor(p.theta / pfResolutionTheta);
+      // Offset indices to be positive for simpler keying (assuming field < 100m)
+      return ((long long)(xi + 500) * 1000 + (yi + 500)) * 100 + (thi + 100);
+    };
 
-      set<long long> occupiedBins;
-      int k = 0;                // num occupied bins
-      int M_chi = minParticles; // Initial target count
-      int M = 0;                // Current count
+    set<long long> occupiedBins;
+    int k = 0;                // num occupied bins
+    int M_chi = minParticles; // Initial target count
+    int M = 0;                // Current count
 
-      // Low Variance Sampling Setup
-      double r = ((double)rand() / RAND_MAX) * (1.0 / pfParticles.size()); // Assuming simplified LV
-      // Standard LV requires fixed size. For KLD we often use simple random sampling with probability prop to weight
-      // OR we can run LV over the old set and keep adding until we hit M_chi.
-      // Let's implement standard "pick proportional to weight" for KLD loop to be strictly correct with dynamic N.
-      // But LV is essentially a better version of that.
-      // We will perform a simplified LV where we cycle through the cumulative distribution.
+    // Low Variance Sampling Setup
+    double r = ((double)rand() / RAND_MAX) * (1.0 / pfParticles.size()); // Assuming simplified LV
+    // Standard LV requires fixed size. For KLD we often use simple random sampling with probability prop to weight
+    // OR we can run LV over the old set and keep adding until we hit M_chi.
+    // Let's implement standard "pick proportional to weight" for KLD loop to be strictly correct with dynamic N.
+    // But LV is essentially a better version of that.
+    // We will perform a simplified LV where we cycle through the cumulative distribution.
 
-      double c = pfParticles[0].weight;
-      int i = 0;                              // index of old particle
-      double step = 1.0 / pfParticles.size(); // conceptual step size? No, we don't know N yet.
+    double c = pfParticles[0].weight;
+    int i = 0;                              // index of old particle
+    double step = 1.0 / pfParticles.size(); // conceptual step size? No, we don't know N yet.
 
-      // KLD Approach: we generate particles one by one until condition met
-      // It's often easier to just sample randomly with valid weights.
-      // Easiest robust impl: Construct CDF
-      vector<double> cdf(pfParticles.size());
-      cdf[0] = pfParticles[0].weight;
-      for (size_t j = 1; j < pfParticles.size(); ++j)
-        cdf[j] = cdf[j - 1] + pfParticles[j].weight;
+    // KLD Approach: we generate particles one by one until condition met
+    // It's often easier to just sample randomly with valid weights.
+    // Easiest robust impl: Construct CDF
+    vector<double> cdf(pfParticles.size());
+    cdf[0] = pfParticles[0].weight;
+    for (size_t j = 1; j < pfParticles.size(); ++j)
+      cdf[j] = cdf[j - 1] + pfParticles[j].weight;
 
-      do {
-        // Select particle
-        double u = (double)rand() / RAND_MAX;
-        // Binary search for index
-        auto it = lower_bound(cdf.begin(), cdf.end(), u);
-        int idx = distance(cdf.begin(), it);
-        if (idx >= (int)pfParticles.size()) idx = pfParticles.size() - 1;
+    do {
+      // Select particle
+      double u = (double)rand() / RAND_MAX;
+      // Binary search for index
+      auto it = lower_bound(cdf.begin(), cdf.end(), u);
+      int idx = distance(cdf.begin(), it);
+      if (idx >= (int)pfParticles.size()) idx = pfParticles.size() - 1;
 
-        Particle newP = pfParticles[idx];
+      Particle newP = pfParticles[idx];
 
-        // Apply motion noise? No, this is resampling step. Motion noise is predict step.
-        // Applying minimal jitter? optional. Sticking to copy.
+      // Apply motion noise? No, this is resampling step. Motion noise is predict step.
+      // Applying minimal jitter? optional. Sticking to copy.
 
-        // Check bin
-        long long key = getBinKey(newP);
-        if (occupiedBins.find(key) == occupiedBins.end()) {
-          occupiedBins.insert(key);
-          k++;
-          // Recalculate M_chi
-          if (k > 1) {
-            // Wilson-Hilferty approximation
-            double z = kldZ;
-            double term = 1.0 - 2.0 / (9.0 * (k - 1)) + sqrt(2.0 / (9.0 * (k - 1))) * z;
-            M_chi = (int)ceil((k - 1) / (2.0 * kldErr) * term * term * term);
-          }
+      // Check bin
+      long long key = getBinKey(newP);
+      if (occupiedBins.find(key) == occupiedBins.end()) {
+        occupiedBins.insert(key);
+        k++;
+        // Recalculate M_chi
+        if (k > 1) {
+          // Wilson-Hilferty approximation
+          double z = kldZ;
+          double term = 1.0 - 2.0 / (9.0 * (k - 1)) + sqrt(2.0 / (9.0 * (k - 1))) * z;
+          M_chi = (int)ceil((k - 1) / (2.0 * kldErr) * term * term * term);
         }
+      }
 
-        newParticles.push_back(newP);
-        M++;
+      newParticles.push_back(newP);
+      M++;
 
-      } while ((M < M_chi || M < minParticles) && M < maxParticles);
+    } while ((M < M_chi || M < minParticles) && M < maxParticles);
 
-      // Normalize weights for new set
-      for (auto &p : newParticles)
-        p.weight = 1.0 / M;
+    // Normalize weights for new set
+    for (auto &p : newParticles)
+      p.weight = 1.0 / M;
 
-      pfParticles = newParticles;
-    }
+    pfParticles = newParticles;
   }
 }
 
