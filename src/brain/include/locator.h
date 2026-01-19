@@ -80,16 +80,33 @@ public:
   rerun::RecordingStream *logger = nullptr;
   void setLog(rerun::RecordingStream *stream);
 
-  // MCL / Particle Filter State
-  struct Particle {
-    double x;
-    double y;
-    double theta;
-    double weight;
-  };
-  std::vector<Particle> pfParticles;
+  // Main PF Parameters (Reduced)
+  int pfNumParticles;
+  double pfInitFieldMargin; // Margin around field for random init
+  double pfInitGlobalDist;  // (Optional) Max distance for global init
+
+  // Weights need to be carefully managed in MatrixXd context
+  // The matrix itself (4 x N) contains x, y, theta, weight
+  Eigen::MatrixXd pfParticles;
+  double avgWeight;
+  double totalWeight;
+
+  // -- Noise Parameters --
+  double initSigmaX, initSigmaY, initSigmaTheta;
+  double updateSigmaX, updateSigmaY, updateSigmaTheta;
+  double sigma; // likelihood sigma
+
+  // -- Movement Thresholds --
+  double distThreshold;
+  double angleThreshold;
+
+  // -- Flags --
+  bool isPFInitialized;
+  std::mutex pfMutex;
+
+  // -- Random Engine --
+  std::default_random_engine generator;
   Pose2D lastPFOdomPose = {0, 0, 0};
-  bool isPFInitialized = false;
   double pfSensorNoiseR = 1.0;
 
   // MCL Methods (PF Suffix)

@@ -1,4 +1,3 @@
-#include <fstream> // 添加这一行
 #include <iostream>
 #include <string>
 #include <yaml-cpp/yaml.h> // 添加这一行
@@ -1284,9 +1283,23 @@ void Brain::detectionsCallback(const vision_interface::msg::Detections &msg) {
 
   // 分别处理分组后的对象
   detectProcessBalls(balls);
-  detectProcessGoalposts(goalposts);
-  detectProcessMarkings(markings);
+  auto markers_goalposts = detectProcessGoalposts(goalposts);
+  auto markers_markings = detectProcessMarkings(markings);
   detectProcessRobots(robots);
+
+  // Combine markers for PF
+  vector<FieldMarker> allMarkers;
+  allMarkers.insert(allMarkers.end(), markers_goalposts.begin(), markers_goalposts.end());
+  allMarkers.insert(allMarkers.end(), markers_markings.begin(), markers_markings.end());
+
+  // MCL Correction (single update with all markers)
+  if (locator->getIsPFInitialized() && !allMarkers.empty()) {
+    locator->correctPF(allMarkers);
+    auto est = locator->getEstimatePF();
+    // Soft update / Hard update strategy
+    // For now, we trust the filter completely
+    calibrateOdom(est.x, est.y, est.theta);
+  }
 
   // 处理并记录视野信息
   detectProcessVisionBox(msg);
@@ -1942,7 +1955,7 @@ void Brain::detectProcessBalls(const vector<GameObject> &ballObjs) {
   data->robotBallAngleToField = atan2(data->ball.posToField.y - data->robotPoseToField.y, data->ball.posToField.x - data->robotPoseToField.x);
 }
 
-void Brain::detectProcessMarkings(const vector<GameObject> &markingObjs) {
+vector<FieldMarker> Brain::detectProcessMarkings(const vector<GameObject> &markingObjs) {
   // // for testing 测距稳定性 ---------
   // for (int i = 0; i < markingObjs.size(); i++) {
   //    auto m = markingObjs[i];
@@ -1969,7 +1982,7 @@ void Brain::detectProcessMarkings(const vector<GameObject> &markingObjs) {
     if (marking.posToRobot.x < -0.5 || marking.posToRobot.x > 15.0) continue;
 
     // 如果通过了重重考验, 则记入 brain
-    identifyMarking(marking);
+    identifyMarking(marking); // rerun용 id 할당
     markings.push_back(marking);
   }
   data->setMarkings(markings);
@@ -2008,20 +2021,13 @@ void Brain::detectProcessMarkings(const vector<GameObject> &markingObjs) {
     markers_pf.push_back(fm);
   }
 
-  // MCL Correction
-  if (locator->getIsPFInitialized()) {
-    locator->correctPF(markers_pf);
-    auto est = locator->getEstimatePF();
-    // Soft update / Hard update strategy
-    // For now, we trust the filter completely
-    calibrateOdom(est.x, est.y, est.theta);
-  }
-
   log->log("field/identified_markings",
            rerun::LineStrips2D(rerun::Collection<rerun::components::LineStrip2D>(circles)).with_radii(0.01).with_labels(labels).with_colors(0xFFFFFFFF));
+
+  return markers_pf;
 }
 
-void Brain::detectProcessGoalposts(const vector<GameObject> &goalpostObjs) {
+vector<FieldMarker> Brain::detectProcessGoalposts(const vector<GameObject> &goalpostObjs) {
   const double confidenceValve = 50; // confidence 低于这个阈值, 排除
   vector<GameObject> goalposts = {};
 
@@ -2054,6 +2060,17 @@ void Brain::detectProcessGoalposts(const vector<GameObject> &goalpostObjs) {
   //     .with_radii(0.01)
   //     .with_labels(labels)
   //     .with_colors(0xFFFFFFFF));
+
+  vector<FieldMarker> markers_pf;
+  for (const auto &g : goalposts) {
+    FieldMarker fm;
+    fm.x = g.posToRobot.x;
+    fm.y = g.posToRobot.y;
+    fm.confidence = g.confidence;
+    fm.type = 'G'; // Type for goalpost
+    markers_pf.push_back(fm);
+  }
+  return markers_pf;
 }
 
 void Brain::detectProcessRobots(const vector<GameObject> &robotObjs) {

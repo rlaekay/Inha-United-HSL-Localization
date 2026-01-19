@@ -206,11 +206,11 @@ private:
   vector<GameObject> getGameObjects(const vision_interface::msg::Detections &msg);
   void detectProcessBalls(const vector<GameObject> &ballObjs);
 
-  void detectProcessMarkings(const vector<GameObject> &markingObjs);
+  vector<FieldMarker> detectProcessMarkings(const vector<GameObject> &markingObjs);
 
   void detectProcessRobots(const vector<GameObject> &robotObjs);
 
-  void detectProcessGoalposts(const vector<GameObject> &goalpostObjs);
+  vector<FieldMarker> detectProcessGoalposts(const vector<GameObject> &goalpostObjs);
 
   void detectProcessVisionBox(const vision_interface::msg::Detections &msg);
 
