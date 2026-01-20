@@ -250,329 +250,330 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     } else {
       Pose2D pose{p.x, p.y, p.theta};
       double logLikelihood = 0;
-
-      // Process each marker type independently
-      for (auto const &[type, obsList] : obsByType) {
-
-        // penalty 타입 걸러주기
-        if (mapByType.find(type) == mapByType.end()) continue;
-
-        const auto &mapList = mapByType[type];
-
-        // Construct Cost Matrix (Rows: Obs, Cols: Map)
-        int nObs = obsList.size();
-        int nMap = mapList.size();
-
-        if (nObs == 0) continue;
-
-        vector<FieldMarker> validObsInField;
-        validObsInField.reserve(nObs);
-
-        auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
-          double c = cos(theta);
-          double s = sin(theta);
-          double dx_r = c * dx_f + s * dy_f;
-          double dy_r = -s * dx_f + c * dy_f;
-
-          return (dx_r * dx_r) / pfObsVarX + (dy_r * dy_r) / pfObsVarY;
-        };
-        vector<FieldMarker> obsInField;
-        for (auto &m_r : obsList) {
-          FieldMarker m_f = markerToFieldFrame(m_r, pose);
-          obsInField.push_back(m_f);
-        }
-        double baseRejectCost = 9.0;
-        int nCols = nMap + nObs;
-
-        // Resize reused buffer if needed (or just assign which handles resize)
-        flatCostMatrix.assign(nObs * nCols, baseRejectCost);
-
-        for (int i = 0; i < nObs; ++i) {
-          for (int j = 0; j < nMap; ++j) {
-            double dx = obsInField[i].x - mapList[j].x;
-            double dy = obsInField[i].y - mapList[j].y;
-            flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy, pose.theta);
-          }
-        }
-
-        vector<int> assignment;
-        double minTotalDistSq = hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
-
-        double sumCost = 0.0;
-        for (int i = 0; i < nObs; ++i) {
-          int j = assignment[i];
-          if (j < 0) continue;
-
-          if (j < nMap) sumCost += flatCostMatrix[i * nCols + j];
-
-          logLikelihood += -0.5 * sumCost;
-        }
-
-        double likelihood = exp(logLikelihood);
-        p.weight *= likelihood;
-      }
-      totalWeight += p.weight;
     }
+    // Process each marker type independently
+    for (auto const &[type, obsList] : obsByType) {
 
-    if (pfParticles.size() > 0) avgWeight = totalWeight / pfParticles.size();
+      // penalty 타입 걸러주기
+      if (mapByType.find(type) == mapByType.end()) continue;
 
-    // Normalize weights
-    if (totalWeight < 1e-10) {
-      for (auto &p : pfParticles)
-        p.weight = 1.0 / pfParticles.size();
-    } else {
-      for (auto &p : pfParticles)
-        p.weight /= totalWeight;
-    }
+      const auto &mapList = mapByType[type];
 
-    double p_inject = this->pfInjectionRatio;
+      // Construct Cost Matrix (Rows: Obs, Cols: Map)
+      int nObs = obsList.size();
+      int nMap = mapList.size();
 
-    double sqSum = 0;
-    for (auto &p : pfParticles)
-      sqSum += p.weight * p.weight;
-    double ess = 1.0 / (sqSum + 1e-9);
+      if (nObs == 0) continue;
 
-    if (ess < pfParticles.size() * 0.4) {
-      vector<Particle> newParticles;
-      newParticles.reserve(maxParticles);
+      vector<FieldMarker> validObsInField;
+      validObsInField.reserve(nObs);
 
-      auto getBinKey = [&](const Particle &p) -> long long {
-        int xi = (int)floor(p.x / pfResolutionX);
-        int yi = (int)floor(p.y / pfResolutionY);
-        // Low Variance Sampling
-        double r = uniformRandom(0.0, 1.0 / pfParticles.size());
-        double c = pfParticles[0].weight;
-        int i = 0;
+      auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
+        double c = cos(theta);
+        double s = sin(theta);
+        double dx_r = c * dx_f + s * dy_f;
+        double dy_r = -s * dx_f + c * dy_f;
 
-        // int targetNum = pfNumParticles; // Or pfParticles.size()
-        int targetNum = pfParticles.size();
-
-        for (int m = 0; m < targetNum; m++) {
-          double u = r + (double)m / targetNum;
-          while (u > c) {
-            i = (i + 1) % pfParticles.size();
-            c += pfParticles[i].weight;
-          }
-
-          Particle newP = pfParticles[i];
-
-          // Injection logic inside loop
-          if (uniformRandom(0.0, 1.0) < p_inject) {
-            double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-            double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
-            double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
-            double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
-
-            newP.x = uniformRandom(xMin, xMax);
-            newP.y = uniformRandom(yMin, yMax);
-            newP.theta = toPInPI(uniformRandom(-M_PI, M_PI));
-            newP.weight = 1.0;
-          }
-          newParticles.push_back(newP);
-        }
-        int M = newParticles.size();
-        // Normalize weights for new set
-        for (auto &p : newParticles)
-          p.weight = 1.0 / M;
-
-        pfParticles = newParticles;
-      }
-    }
-
-    Pose2D Locator::getEstimatePF() {
-      if (pfParticles.empty()) return {0, 0, 0};
-
-      struct Cluster {
-        double totalWeight = 0;
-        double xSum = 0;
-        double ySum = 0;
-        double cosSum = 0;
-        double sinSum = 0;
-        double leaderX = 0;
-        double leaderY = 0;
-        double leaderTheta = 0;
+        return (dx_r * dx_r) / pfObsVarX + (dy_r * dy_r) / pfObsVarY;
       };
+      vector<FieldMarker> obsInField;
+      for (auto &m_r : obsList) {
+        FieldMarker m_f = markerToFieldFrame(m_r, pose);
+        obsInField.push_back(m_f);
+      }
+      double baseRejectCost = 9.0;
+      int nCols = nMap + nObs;
 
-      std::vector<Cluster> clusters;
+      // Resize reused buffer if needed (or just assign which handles resize)
+      flatCostMatrix.assign(nObs * nCols, baseRejectCost);
 
-      // Sort
-      std::vector<int> sortedIndices(pfParticles.size());
-      std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
-      std::sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) { return pfParticles[a].weight > pfParticles[b].weight; });
-
-      return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
-
-      // // Take weighted average of top 10 particles
-      // double sumW = 0.0;
-      // double x = 0.0, y = 0.0, sumSin = 0.0, sumCos = 0.0;
-
-      // int count = std::min((int)sortedIndices.size(), 10);
-      // for (int i = 0; i < count; ++i) {
-      //   const auto &p = pfParticles[sortedIndices[i]];
-      //   x += p.x * p.weight;
-      //   y += p.y * p.weight;
-      //   sumSin += sin(p.theta) * p.weight;
-      //   sumCos += cos(p.theta) * p.weight;
-      //   sumW += p.weight;
-      // }
-
-      // if (sumW > 1e-9) {
-      //   return {x / sumW, y / sumW, atan2(sumSin, sumCos)};
-      // } else {
-      //   // Fallback if weights are zero (shouldn't happen with proper normalization)
-      //   return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
-      // }
-
-      // // clustering
-      // for (int idx : sortedIndices) {
-      //   auto &p = pfParticles[idx];
-      //   bool added = false;
-      //   for (auto &c : clusters) {
-      //     // 게이팅
-      //     double d = std::hypot(p.x - c.leaderX, p.y - c.leaderY);
-      //     double dTheta = std::fabs(toPInPI(p.theta - c.leaderTheta));
-      //     // weighted sum 구하기
-      //     if (d < pfClusterDistThr && dTheta < pfClusterThetaThr) {
-      //       c.totalWeight += p.weight;
-      //       c.xSum += p.x * p.weight;
-      //       c.ySum += p.y * p.weight;
-      //       c.cosSum += cos(p.theta) * p.weight;
-      //       c.sinSum += sin(p.theta) * p.weight;
-      //       added = true;
-      //       break;
-      //     }
-      //   }
-      //   // cluster에 포함되지 않았다면 다른 클러스터의 대장이 됨
-      //   if (!added) {
-      //     Cluster c;
-      //     c.totalWeight = p.weight;
-      //     c.xSum = p.x * p.weight;
-      //     c.ySum = p.y * p.weight;
-      //     c.cosSum = cos(p.theta) * p.weight;
-      //     c.sinSum += sin(p.theta) * p.weight;
-      //     c.leaderX = p.x;
-      //     c.leaderY = p.y;
-      //     c.leaderTheta = p.theta;
-      //     clusters.push_back(c);
-      //   }
-      // }
-
-      // // 가장 큰 가중치 합을 가진 클러스터 선택
-      // int bestClusterIdx = -1;
-      // double maxWeight = -1.0;
-
-      // for (int i = 0; i < clusters.size(); i++) {
-      //   if (clusters[i].totalWeight > maxWeight) {
-      //     maxWeight = clusters[i].totalWeight;
-      //     bestClusterIdx = i;
-      //   }
-      // }
-
-      // if (bestClusterIdx == -1) return {0, 0, 0};
-
-      // // expected value
-      // Pose2D rawEstPose;
-      // auto &bestC = clusters[bestClusterIdx];
-      // if (bestC.totalWeight > 0) {
-      //   rawEstPose = Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)}; // 기댓값
-      // } else {
-      //   rawEstPose = Pose2D{bestC.leaderX, bestC.leaderY, bestC.leaderTheta};
-      // }
-
-      // // EMA smoothing
-      // if (!hasSmoothedPose) {
-      //   smoothedPose = rawEstPose;
-      //   hasSmoothedPose = true;
-      // } else {
-      //   smoothedPose.x = pfSmoothAlpha * rawEstPose.x + (1.0 - pfSmoothAlpha) * smoothedPose.x;
-      //   smoothedPose.y = pfSmoothAlpha * rawEstPose.y + (1.0 - pfSmoothAlpha) * smoothedPose.y;
-      //   double diffTheta = toPInPI(rawEstPose.theta - smoothedPose.theta);
-      //   smoothedPose.theta = toPInPI(smoothedPose.theta + pfSmoothAlpha * diffTheta);
-      // }
-
-      // return smoothedPose;
-    }
-
-    void Locator::setLog(rerun::RecordingStream * stream) { logger = stream; }
-
-    void Locator::logParticles(double time_sec) {
-      if (!enableLog || logger == nullptr) return;
-
-      const size_t pfN = pfParticles.size();
-
-      prtWarn(format("[PF][logParticles] pfN=%zu enableLog=%d", pfParticles.size(), enableLog ? 1 : 0));
-
-      std::vector<rerun::Position2D> origins;
-      std::vector<rerun::Vector2D> vectors;
-      std::vector<rerun::Color> colors;
-      std::vector<float> radii;
-
-      origins.reserve(pfN);
-      vectors.reserve(pfN);
-      colors.reserve(pfN);
-      radii.reserve(pfN);
-
-      const float len = 0.1f;
-
-      for (const auto &p : pfParticles) {
-        float x0 = static_cast<float>(p.x);
-        float y0 = static_cast<float>(p.y);
-        float dx = len * std::cos(p.theta);
-        float dy = len * std::sin(p.theta);
-
-        origins.push_back({x0, -y0}); // Flip Y for display
-        vectors.push_back({dx, -dy}); // Flip Y for display
-
-        // Dynamic Alpha: Base 50, scales up with weight
-        // multiplier 1000 ensures that even small weights get some boost, but max out at 200
-        uint8_t alpha = static_cast<uint8_t>(std::clamp(50.0 + p.weight * 2000.0, 50.0, 200.0));
-        colors.push_back(rerun::Color{0, 255, 255, alpha});
-
-        // Base radius 0.005, max radius 0.05
-        float r = 0.005f + 0.045f * (float)(p.weight);
-        radii.push_back(r);
+      for (int i = 0; i < nObs; ++i) {
+        for (int j = 0; j < nMap; ++j) {
+          double dx = obsInField[i].x - mapList[j].x;
+          double dy = obsInField[i].y - mapList[j].y;
+          flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy, pose.theta);
+        }
       }
 
-      logger->log("field/particles", rerun::Arrows2D::from_vectors(vectors).with_origins(origins).with_colors(colors).with_radii(radii).with_draw_order(19.0));
-    }
+      vector<int> assignment;
+      double minTotalDistSq = hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
 
-    FieldMarker Locator::markerToFieldFrame(FieldMarker marker_r, Pose2D pose_r2f) {
-      auto [x, y, theta] = pose_r2f;
+      double sumCost = 0.0;
+      for (int i = 0; i < nObs; ++i) {
+        int j = assignment[i];
+        if (j < 0) continue;
 
-      Eigen::Matrix3d transform;
-      transform << cos(theta), -sin(theta), x, sin(theta), cos(theta), y, 0, 0, 1;
+        if (j < nMap) sumCost += flatCostMatrix[i * nCols + j];
 
-      Eigen::Vector3d point_r;
-      point_r << marker_r.x, marker_r.y, 1.0;
-
-      auto point_f = transform * point_r;
-
-      return FieldMarker{marker_r.type, point_f.x(), point_f.y(), marker_r.confidence};
-    }
-
-    double Locator::minDist(FieldMarker marker) {
-      double minDist = std::numeric_limits<double>::infinity();
-      double dist;
-      for (int i = 0; i < fieldMarkers.size(); i++) {
-        auto target = fieldMarkers[i];
-        if (target.type != marker.type) { continue; }
-        dist = sqrt(pow((target.x - marker.x), 2.0) + pow((target.y - marker.y), 2.0));
-        if (dist < minDist) minDist = dist;
+        logLikelihood += -0.5 * sumCost;
       }
-      return minDist;
+
+      double likelihood = exp(logLikelihood);
+      p.weight *= likelihood;
     }
+    totalWeight += p.weight;
+  }
 
-    // 나중에 모드를 설정해서 initial particle 영역을 달리해야댐
-    NodeStatus SelfLocateEnterField::tick() {
-      if (!brain->locator->getIsPFInitialized()) { brain->locator->globalInitPF(brain->data->robotPoseToOdom); }
-      return NodeStatus::SUCCESS;
+  if (pfParticles.size() > 0) avgWeight = totalWeight / pfParticles.size();
+
+  // Normalize weights
+  if (totalWeight < 1e-10) {
+    for (auto &p : pfParticles)
+      p.weight = 1.0 / pfParticles.size();
+  } else {
+    for (auto &p : pfParticles)
+      p.weight /= totalWeight;
+  }
+
+  double p_inject = this->pfInjectionRatio;
+
+  double sqSum = 0;
+  for (auto &p : pfParticles)
+    sqSum += p.weight * p.weight;
+  double ess = 1.0 / (sqSum + 1e-9);
+
+  if (ess < pfParticles.size() * 0.4) {
+    vector<Particle> newParticles;
+    newParticles.reserve(maxParticles);
+
+    auto getBinKey = [&](const Particle &p) -> long long {
+      int xi = (int)floor(p.x / pfResolutionX);
+      int yi = (int)floor(p.y / pfResolutionY);
+      // Low Variance Sampling
+      double r = uniformRandom(0.0, 1.0 / pfParticles.size());
+      double c = pfParticles[0].weight;
+      int i = 0;
+
+      // int targetNum = pfNumParticles; // Or pfParticles.size()
+      int targetNum = pfParticles.size();
+
+      for (int m = 0; m < targetNum; m++) {
+        double u = r + (double)m / targetNum;
+        while (u > c) {
+          i = (i + 1) % pfParticles.size();
+          c += pfParticles[i].weight;
+        }
+
+        Particle newP = pfParticles[i];
+
+        // Injection logic inside loop
+        if (uniformRandom(0.0, 1.0) < p_inject) {
+          double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
+          double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
+          double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
+          double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
+
+          newP.x = uniformRandom(xMin, xMax);
+          newP.y = uniformRandom(yMin, yMax);
+          newP.theta = toPInPI(uniformRandom(-M_PI, M_PI));
+          newP.weight = 1.0;
+        }
+        newParticles.push_back(newP);
+      }
+      int M = newParticles.size();
+      // Normalize weights for new set
+      for (auto &p : newParticles)
+        p.weight = 1.0 / M;
+
+      pfParticles = newParticles;
     }
+  }
+}
 
-    NodeStatus SelfLocate::tick() { return NodeStatus::SUCCESS; }
+Pose2D Locator::getEstimatePF() {
+  if (pfParticles.empty()) return {0, 0, 0};
 
-    NodeStatus SelfLocate1M::tick() { return NodeStatus::SUCCESS; }
-    NodeStatus SelfLocate2X::tick() { return NodeStatus::SUCCESS; }
-    NodeStatus SelfLocate2T::tick() { return NodeStatus::SUCCESS; }
-    NodeStatus SelfLocateLT::tick() { return NodeStatus::SUCCESS; }
-    NodeStatus SelfLocatePT::tick() { return NodeStatus::SUCCESS; }
-    NodeStatus SelfLocateBorder::tick() { return NodeStatus::SUCCESS; }
+  struct Cluster {
+    double totalWeight = 0;
+    double xSum = 0;
+    double ySum = 0;
+    double cosSum = 0;
+    double sinSum = 0;
+    double leaderX = 0;
+    double leaderY = 0;
+    double leaderTheta = 0;
+  };
+
+  std::vector<Cluster> clusters;
+
+  // Sort
+  std::vector<int> sortedIndices(pfParticles.size());
+  std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+  std::sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) { return pfParticles[a].weight > pfParticles[b].weight; });
+
+  return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
+
+  // // Take weighted average of top 10 particles
+  // double sumW = 0.0;
+  // double x = 0.0, y = 0.0, sumSin = 0.0, sumCos = 0.0;
+
+  // int count = std::min((int)sortedIndices.size(), 10);
+  // for (int i = 0; i < count; ++i) {
+  //   const auto &p = pfParticles[sortedIndices[i]];
+  //   x += p.x * p.weight;
+  //   y += p.y * p.weight;
+  //   sumSin += sin(p.theta) * p.weight;
+  //   sumCos += cos(p.theta) * p.weight;
+  //   sumW += p.weight;
+  // }
+
+  // if (sumW > 1e-9) {
+  //   return {x / sumW, y / sumW, atan2(sumSin, sumCos)};
+  // } else {
+  //   // Fallback if weights are zero (shouldn't happen with proper normalization)
+  //   return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
+  // }
+
+  // // clustering
+  // for (int idx : sortedIndices) {
+  //   auto &p = pfParticles[idx];
+  //   bool added = false;
+  //   for (auto &c : clusters) {
+  //     // 게이팅
+  //     double d = std::hypot(p.x - c.leaderX, p.y - c.leaderY);
+  //     double dTheta = std::fabs(toPInPI(p.theta - c.leaderTheta));
+  //     // weighted sum 구하기
+  //     if (d < pfClusterDistThr && dTheta < pfClusterThetaThr) {
+  //       c.totalWeight += p.weight;
+  //       c.xSum += p.x * p.weight;
+  //       c.ySum += p.y * p.weight;
+  //       c.cosSum += cos(p.theta) * p.weight;
+  //       c.sinSum += sin(p.theta) * p.weight;
+  //       added = true;
+  //       break;
+  //     }
+  //   }
+  //   // cluster에 포함되지 않았다면 다른 클러스터의 대장이 됨
+  //   if (!added) {
+  //     Cluster c;
+  //     c.totalWeight = p.weight;
+  //     c.xSum = p.x * p.weight;
+  //     c.ySum = p.y * p.weight;
+  //     c.cosSum = cos(p.theta) * p.weight;
+  //     c.sinSum += sin(p.theta) * p.weight;
+  //     c.leaderX = p.x;
+  //     c.leaderY = p.y;
+  //     c.leaderTheta = p.theta;
+  //     clusters.push_back(c);
+  //   }
+  // }
+
+  // // 가장 큰 가중치 합을 가진 클러스터 선택
+  // int bestClusterIdx = -1;
+  // double maxWeight = -1.0;
+
+  // for (int i = 0; i < clusters.size(); i++) {
+  //   if (clusters[i].totalWeight > maxWeight) {
+  //     maxWeight = clusters[i].totalWeight;
+  //     bestClusterIdx = i;
+  //   }
+  // }
+
+  // if (bestClusterIdx == -1) return {0, 0, 0};
+
+  // // expected value
+  // Pose2D rawEstPose;
+  // auto &bestC = clusters[bestClusterIdx];
+  // if (bestC.totalWeight > 0) {
+  //   rawEstPose = Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)}; // 기댓값
+  // } else {
+  //   rawEstPose = Pose2D{bestC.leaderX, bestC.leaderY, bestC.leaderTheta};
+  // }
+
+  // // EMA smoothing
+  // if (!hasSmoothedPose) {
+  //   smoothedPose = rawEstPose;
+  //   hasSmoothedPose = true;
+  // } else {
+  //   smoothedPose.x = pfSmoothAlpha * rawEstPose.x + (1.0 - pfSmoothAlpha) * smoothedPose.x;
+  //   smoothedPose.y = pfSmoothAlpha * rawEstPose.y + (1.0 - pfSmoothAlpha) * smoothedPose.y;
+  //   double diffTheta = toPInPI(rawEstPose.theta - smoothedPose.theta);
+  //   smoothedPose.theta = toPInPI(smoothedPose.theta + pfSmoothAlpha * diffTheta);
+  // }
+
+  // return smoothedPose;
+}
+
+void Locator::setLog(rerun::RecordingStream *stream) { logger = stream; }
+
+void Locator::logParticles(double time_sec) {
+  if (!enableLog || logger == nullptr) return;
+
+  const size_t pfN = pfParticles.size();
+
+  prtWarn(format("[PF][logParticles] pfN=%zu enableLog=%d", pfParticles.size(), enableLog ? 1 : 0));
+
+  std::vector<rerun::Position2D> origins;
+  std::vector<rerun::Vector2D> vectors;
+  std::vector<rerun::Color> colors;
+  std::vector<float> radii;
+
+  origins.reserve(pfN);
+  vectors.reserve(pfN);
+  colors.reserve(pfN);
+  radii.reserve(pfN);
+
+  const float len = 0.1f;
+
+  for (const auto &p : pfParticles) {
+    float x0 = static_cast<float>(p.x);
+    float y0 = static_cast<float>(p.y);
+    float dx = len * std::cos(p.theta);
+    float dy = len * std::sin(p.theta);
+
+    origins.push_back({x0, -y0}); // Flip Y for display
+    vectors.push_back({dx, -dy}); // Flip Y for display
+
+    // Dynamic Alpha: Base 50, scales up with weight
+    // multiplier 1000 ensures that even small weights get some boost, but max out at 200
+    uint8_t alpha = static_cast<uint8_t>(std::clamp(50.0 + p.weight * 2000.0, 50.0, 200.0));
+    colors.push_back(rerun::Color{0, 255, 255, alpha});
+
+    // Base radius 0.005, max radius 0.05
+    float r = 0.005f + 0.045f * (float)(p.weight);
+    radii.push_back(r);
+  }
+
+  logger->log("field/particles", rerun::Arrows2D::from_vectors(vectors).with_origins(origins).with_colors(colors).with_radii(radii).with_draw_order(19.0));
+}
+
+FieldMarker Locator::markerToFieldFrame(FieldMarker marker_r, Pose2D pose_r2f) {
+  auto [x, y, theta] = pose_r2f;
+
+  Eigen::Matrix3d transform;
+  transform << cos(theta), -sin(theta), x, sin(theta), cos(theta), y, 0, 0, 1;
+
+  Eigen::Vector3d point_r;
+  point_r << marker_r.x, marker_r.y, 1.0;
+
+  auto point_f = transform * point_r;
+
+  return FieldMarker{marker_r.type, point_f.x(), point_f.y(), marker_r.confidence};
+}
+
+double Locator::minDist(FieldMarker marker) {
+  double minDist = std::numeric_limits<double>::infinity();
+  double dist;
+  for (int i = 0; i < fieldMarkers.size(); i++) {
+    auto target = fieldMarkers[i];
+    if (target.type != marker.type) { continue; }
+    dist = sqrt(pow((target.x - marker.x), 2.0) + pow((target.y - marker.y), 2.0));
+    if (dist < minDist) minDist = dist;
+  }
+  return minDist;
+}
+
+// 나중에 모드를 설정해서 initial particle 영역을 달리해야댐
+NodeStatus SelfLocateEnterField::tick() {
+  if (!brain->locator->getIsPFInitialized()) { brain->locator->globalInitPF(brain->data->robotPoseToOdom); }
+  return NodeStatus::SUCCESS;
+}
+
+NodeStatus SelfLocate::tick() { return NodeStatus::SUCCESS; }
+
+NodeStatus SelfLocate1M::tick() { return NodeStatus::SUCCESS; }
+NodeStatus SelfLocate2X::tick() { return NodeStatus::SUCCESS; }
+NodeStatus SelfLocate2T::tick() { return NodeStatus::SUCCESS; }
+NodeStatus SelfLocateLT::tick() { return NodeStatus::SUCCESS; }
+NodeStatus SelfLocatePT::tick() { return NodeStatus::SUCCESS; }
+NodeStatus SelfLocateBorder::tick() { return NodeStatus::SUCCESS; }
