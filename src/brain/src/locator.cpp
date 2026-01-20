@@ -336,47 +336,42 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     vector<Particle> newParticles;
     newParticles.reserve(maxParticles);
 
-    auto getBinKey = [&](const Particle &p) -> long long {
-      int xi = (int)floor(p.x / pfResolutionX);
-      int yi = (int)floor(p.y / pfResolutionY);
-      // Low Variance Sampling
-      double r = uniformRandom(0.0, 1.0 / pfParticles.size());
-      double c = pfParticles[0].weight;
-      int i = 0;
+    // Low Variance Sampling
+    double r = uniformRandom(0.0, 1.0 / pfParticles.size());
+    double c = pfParticles[0].weight;
+    int i = 0;
 
-      // int targetNum = pfNumParticles; // Or pfParticles.size()
-      int targetNum = pfParticles.size();
+    int targetNum = pfParticles.size();
 
-      for (int m = 0; m < targetNum; m++) {
-        double u = r + (double)m / targetNum;
-        while (u > c) {
-          i = (i + 1) % pfParticles.size();
-          c += pfParticles[i].weight;
-        }
-
-        Particle newP = pfParticles[i];
-
-        // Injection logic inside loop
-        if (uniformRandom(0.0, 1.0) < p_inject) {
-          double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-          double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
-          double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
-          double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
-
-          newP.x = uniformRandom(xMin, xMax);
-          newP.y = uniformRandom(yMin, yMax);
-          newP.theta = toPInPI(uniformRandom(-M_PI, M_PI));
-          newP.weight = 1.0;
-        }
-        newParticles.push_back(newP);
+    for (int m = 0; m < targetNum; m++) {
+      double u = r + (double)m / targetNum;
+      while (u > c) {
+        i = (i + 1) % pfParticles.size();
+        c += pfParticles[i].weight;
       }
-      int M = newParticles.size();
-      // Normalize weights for new set
-      for (auto &p : newParticles)
-        p.weight = 1.0 / M;
 
-      pfParticles = newParticles;
+      Particle newP = pfParticles[i];
+
+      // Injection logic inside loop
+      if (uniformRandom(0.0, 1.0) < p_inject) {
+        double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
+        double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
+        double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
+        double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
+
+        newP.x = uniformRandom(xMin, xMax);
+        newP.y = uniformRandom(yMin, yMax);
+        newP.theta = toPInPI(uniformRandom(-M_PI, M_PI));
+        newP.weight = 1.0;
+      }
+      newParticles.push_back(newP);
     }
+    int M = newParticles.size();
+    // Normalize weights for new set
+    for (auto &p : newParticles)
+      p.weight = 1.0 / M;
+
+    pfParticles = newParticles;
   }
 }
 
