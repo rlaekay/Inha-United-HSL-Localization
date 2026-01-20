@@ -64,12 +64,14 @@ brain_node:
 
 
       pf_sensor_noise: 1.5
-      pf_obs_var_x: 0.04 
-      pf_obs_var_y: 0.04 
+      pf_injection_ratio: 0.1
 
-      pf_alpha_1: 0.001 #rot -> rot
+      pf_obs_var_x: 1.0 
+      pf_obs_var_y: 0.5
+
+      pf_alpha_1: 0.005 #rot -> rot
       pf_alpha_2: 0.001 #trans -> rot
-      pf_alpha_3: 0.001 # trans-> trans
+      pf_alpha_3: 0.005 # trans-> trans
       pf_alpha_4: 0.001 #rot->trans
 
 

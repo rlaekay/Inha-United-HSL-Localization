@@ -254,7 +254,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
       // Process each marker type independently
       for (auto const &[type, obsList] : obsByType) {
 
-        // penalty 걸러주기
+        // penalty 타입 걸러주기
         if (mapByType.find(type) == mapByType.end()) continue;
 
         const auto &mapList = mapByType[type];
@@ -265,14 +265,9 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
 
         vector<FieldMarker> validObsInField;
         validObsInField.reserve(nObs);
-        double gateDistSq = 1.8 * 1.8; // 1.8m gating
+        double gateDistSq = 2.0 * 2.0; // 2.0m gating
 
-        // Helper to compute Mahalanobis-like cost:
-        // Returns "squared distance" in standard deviations (Chi-square statistic)
-        // dx_f, dy_f: difference in field frame
-        // theta: robot orientation
         auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
-          // Rotate difference into robot frame
           double c = cos(theta);
           double s = sin(theta);
           double dx_r = c * dx_f + s * dy_f;
@@ -344,7 +339,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
   }
 
   // Calculate dynamic injection probability
-  double p_inject = std::max(0.0, 1.0 - w_fast / w_slow);
+  double p_inject = this->pfInjectionRatio;
 
   double sqSum = 0;
   for (auto &p : pfParticles)
@@ -352,6 +347,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
   double ess = 1.0 / (sqSum + 1e-9);
 
   if (ess < pfParticles.size() * 0.5) {
+    // if (true) {
     vector<Particle> newParticles;
     newParticles.reserve(maxParticles);
 
