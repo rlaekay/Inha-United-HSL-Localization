@@ -250,61 +250,61 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     } else {
       Pose2D pose{p.x, p.y, p.theta};
       double logLikelihood = 0;
-    }
-    // Process each marker type independently
-    for (auto const &[type, obsList] : obsByType) {
 
-      // penalty 타입 걸러주기
-      if (mapByType.find(type) == mapByType.end()) continue;
+      // Process each marker type independently
+      for (auto const &[type, obsList] : obsByType) {
 
-      const auto &mapList = mapByType[type];
+        // penalty 타입 걸러주기
+        if (mapByType.find(type) == mapByType.end()) continue;
 
-      // Construct Cost Matrix (Rows: Obs, Cols: Map)
-      int nObs = obsList.size();
-      int nMap = mapList.size();
+        const auto &mapList = mapByType[type];
 
-      if (nObs == 0) continue;
+        // Construct Cost Matrix (Rows: Obs, Cols: Map)
+        int nObs = obsList.size();
+        int nMap = mapList.size();
 
-      vector<FieldMarker> validObsInField;
-      validObsInField.reserve(nObs);
+        if (nObs == 0) continue;
 
-      auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
-        double c = cos(theta);
-        double s = sin(theta);
-        double dx_r = c * dx_f + s * dy_f;
-        double dy_r = -s * dx_f + c * dy_f;
+        vector<FieldMarker> validObsInField;
+        validObsInField.reserve(nObs);
 
-        return (dx_r * dx_r) / pfObsVarX + (dy_r * dy_r) / pfObsVarY;
-      };
-      vector<FieldMarker> obsInField;
-      for (auto &m_r : obsList) {
-        FieldMarker m_f = markerToFieldFrame(m_r, pose);
-        obsInField.push_back(m_f);
-      }
-      double baseRejectCost = 9.0;
-      int nCols = nMap + nObs;
+        auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
+          double c = cos(theta);
+          double s = sin(theta);
+          double dx_r = c * dx_f + s * dy_f;
+          double dy_r = -s * dx_f + c * dy_f;
 
-      // Resize reused buffer if needed (or just assign which handles resize)
-      flatCostMatrix.assign(nObs * nCols, baseRejectCost);
-
-      for (int i = 0; i < nObs; ++i) {
-        for (int j = 0; j < nMap; ++j) {
-          double dx = obsInField[i].x - mapList[j].x;
-          double dy = obsInField[i].y - mapList[j].y;
-          flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy, pose.theta);
+          return (dx_r * dx_r) / pfObsVarX + (dy_r * dy_r) / pfObsVarY;
+        };
+        vector<FieldMarker> obsInField;
+        for (auto &m_r : obsList) {
+          FieldMarker m_f = markerToFieldFrame(m_r, pose);
+          obsInField.push_back(m_f);
         }
-      }
+        double baseRejectCost = 9.0;
+        int nCols = nMap + nObs;
 
-      vector<int> assignment;
-      double minTotalDistSq = hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
+        // Resize reused buffer if needed (or just assign which handles resize)
+        flatCostMatrix.assign(nObs * nCols, baseRejectCost);
 
-      double sumCost = 0.0;
-      for (int i = 0; i < nObs; ++i) {
-        int j = assignment[i];
-        if (j < 0) continue;
+        for (int i = 0; i < nObs; ++i) {
+          for (int j = 0; j < nMap; ++j) {
+            double dx = obsInField[i].x - mapList[j].x;
+            double dy = obsInField[i].y - mapList[j].y;
+            flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy, pose.theta);
+          }
+        }
 
-        if (j < nMap) sumCost += flatCostMatrix[i * nCols + j];
+        vector<int> assignment;
+        double minTotalDistSq = hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
 
+        double sumCost = 0.0;
+        for (int i = 0; i < nObs; ++i) {
+          int j = assignment[i];
+          if (j < 0) continue;
+
+          if (j < nMap) sumCost += flatCostMatrix[i * nCols + j];
+        }
         logLikelihood += -0.5 * sumCost;
       }
 
