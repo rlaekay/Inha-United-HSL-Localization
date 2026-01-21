@@ -28,6 +28,7 @@ ament_target_dependencies(vision_node
   image_transport
   tf2
   builtin_interfaces
+  booster_interface
   vision_interface
 )
 

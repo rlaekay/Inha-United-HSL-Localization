@@ -16,6 +16,8 @@ find_package(image_transport REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(vision_interface REQUIRED)
+find_package(booster_interface REQUIRED)
+
 
 find_package(OpenCV 4.5 REQUIRED)
 find_package(YAML-CPP REQUIRED)

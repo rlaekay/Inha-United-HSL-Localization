@@ -14,10 +14,11 @@
 #include <string>
 #include <vector>
 
+#include "types.h"
 #include "utils/hungarian.h"
 
 using namespace std;
-ㅜ namespace chr = std::chrono;
+namespace chr = std::chrono;
 
 class Locator {
 public:

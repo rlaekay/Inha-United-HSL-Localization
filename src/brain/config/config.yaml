@@ -54,12 +54,12 @@ brain_node:
       chase_ao_safe_dist: 3.5 
 
     locator:
-      pf_smooth_alpha: 0.9 # 반영비율
+      pf_smooth_alpha: 0.9 
       
-      pf_injection_ratio: 0.01
+      pf_injection_ratio: 0.001
 
-      pf_inv_obs_var_x: 1.4 
-      pf_inv_obs_var_y: 4.0
+      pf_inv_obs_var_x: 0.3
+      pf_inv_obs_var_y: 1.0
 
       pf_unmatched_penalty_conf_thr: 0.6
 
@@ -70,7 +70,7 @@ brain_node:
 
       init_field_margin: 0.5
 
-      ess_threshold: 0.4
+      ess_threshold: 0.3
 
       pf_cluster_dist_thr: 0.8
       pf_cluster_theta_thr: 0.3 
@@ -82,7 +82,7 @@ brain_node:
       pf_alpha_slow: 0.05
       pf_alpha_fast: 0.5
       pf_resample_when_stopped: true
-      num_particles: 300
+      num_particles: 100
       pf_zeromotion_trans_thresh: 0.05 #m
       pf_zeromotion_rot_thresh: 0.05 # 라디안
 
@@ -91,7 +91,7 @@ brain_node:
 
     rerunLog:
       enable_tcp: true 
-      server_ip: "192.168.50.136:9876" 
+      server_ip: "192.168.0.151:9876" 
       enable_file: true 
       log_dir: "/home/booster/Workspace/rrlog"
       max_log_file_mins: 5.0 

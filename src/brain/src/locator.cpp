@@ -121,7 +121,7 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->invPfObsVarX = invObsVarX;
   this->invPfObsVarY = invObsVarY;
   this->pfUnmatchedPenaltyConfThr = unmatchedPenaltyConfThr;
-  this->pfEssThreshold = essThreshold;
+  this->pfEssThreshold = pfEssThreshold;
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
