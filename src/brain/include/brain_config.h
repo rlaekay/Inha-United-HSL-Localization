@@ -97,8 +97,9 @@ public:
   double pfAlphaSlow = 0.05;
   double pfAlphaFast = 0.5;
   double pfInjectionRatio = 0.2;
-  double pfObsVarX = 0.04; // 0.2m std dev
-  double pfObsVarY = 0.04; // 0.2m std dev
+  double pfInvObsVarX = 1.4;
+  double pfInvObsVarY = 4.0;
+  double pfUnmatchedPenaltyConfThr = 0.6;
 
   double pfZeroMotionTransThresh = 0.001;
   double pfZeroMotionRotThresh = 0.002;

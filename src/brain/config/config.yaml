@@ -66,8 +66,9 @@ brain_node:
       pf_sensor_noise: 1.5
       pf_injection_ratio: 0.01
 
-      pf_obs_var_x: 1.0 
-      pf_obs_var_y: 0.7
+      pf_inv_obs_var_x: 1.4 
+      pf_inv_obs_var_y: 4.0
+      pf_unmatched_penalty_conf_thr: 0.6
 
       pf_alpha_1: 0.001 #rot -> rot
       pf_alpha_2: 0.001 #trans -> rot

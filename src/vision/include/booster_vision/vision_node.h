@@ -23,6 +23,11 @@
 
 #include "booster_vision/color_classifier.hpp"
 
+// 승재욱 추가
+#include "booster_interface/msg/low_state.hpp"
+#include <mutex>
+#include <Eigen/Core>
+
 namespace booster_vision {
 
 class DataLogger;
@@ -46,6 +51,8 @@ public:
     void CalParamCallback(const vision_interface::msg::CalParam::SharedPtr msg);
     void ProcessData(SyncedDataBlock &synced_data, vision_interface::msg::Detections &detections);
     void ProcessSegmentationData(SyncedDataBlock &synced_data, vision_interface::msg::LineSegments &field_line_segs_msg);
+    // 승재욱 추가
+    void lowStateCallback(const booster_interface::msg::LowState &msg);
 
 private:
     bool use_depth_ = false;
@@ -56,6 +63,8 @@ private:
     bool offline_mode_ = false;
     std::string detection_model_path;
     std::string segmentation_model_path;
+    // 승재욱 추가
+    bool use_imu_ = false;
 
     int save_cnt_ = 0;
     int save_every_n_frame_ = 0;
@@ -80,7 +89,6 @@ private:
     // std::string profiler_log_path_;
     // bool first_write_profiler_log_ = true;
 
-
     std::shared_ptr<rclcpp::Node> nh_;
     rclcpp::Publisher<vision_interface::msg::Detections>::SharedPtr detection_pub_;
     rclcpp::Publisher<vision_interface::msg::LineSegments>::SharedPtr field_line_pub_;
@@ -91,6 +99,9 @@ private:
 
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr pose_tf_pub_;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr pose_tf_sub_;
+
+    // 승재욱 추가
+    rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr imu_sub_;
 
     std::shared_ptr<image_transport::ImageTransport> it_;
     image_transport::Subscriber color_sub_;
@@ -103,6 +114,8 @@ private:
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_2_;
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_3_;
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_4_;
+    // 승재욱 추가
+    rclcpp::CallbackGroup::SharedPtr callback_group_sub_5_;
 
     std::shared_ptr<ColorClassifier> color_classifier_;
 
@@ -113,6 +126,14 @@ private:
     std::shared_ptr<YoloV8Segmentor> segmentor_;
     std::shared_ptr<PoseEstimator> pose_estimator_;
     std::map<std::string, std::shared_ptr<PoseEstimator>> pose_estimator_map_;
+
+    // 승재욱 추가
+    mutable std::mutex imu_mutex_;
+    Eigen::Vector3f imu_rpy_{0.f, 0.f, 0.f};
+    Eigen::Vector3f imu_gyro_{0.f, 0.f, 0.f};
+    Eigen::Vector3f imu_acc_{0.f, 0.f, 0.f};
+    bool imu_ready_ = false;
+    double imu_timestamp_ = 0.0;
 };
 
 } // namespace booster_vision

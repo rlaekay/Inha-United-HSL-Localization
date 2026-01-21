@@ -20,14 +20,15 @@ std::mt19937 &getRandomEngine() {
 }
 
 double gaussianRandom(double mean, double stddev) {
-  std::normal_distribution<double> d(mean, stddev);
-  return d(getRandomEngine());
+  static std::normal_distribution<double> N01(0.0, 1.0);
+  return mean + stddev * N01(getRandomEngine());
 }
 
 double uniformRandom(double min, double max) {
-  std::uniform_real_distribution<double> d(min, max);
-  return d(getRandomEngine());
+  static std::uniform_real_distribution<double> U01(0.0, 1.0);
+  return min + (max - min) * U01(getRandomEngine());
 }
+
 void RegisterLocatorNodes(BT::BehaviorTreeFactory &factory, Brain *brain) {
   REGISTER_LOCATOR_BUILDER(SelfLocate);
   REGISTER_LOCATOR_BUILDER(SelfLocateEnterField);
@@ -91,7 +92,7 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
                           double clusterThetaThr, double smoothAlpha, double kldErr, double kldZ, int minParticles, int maxParticles, double resX, double resY,
-                          double resTheta, double obsVarX, double obsVarY) {
+                          double resTheta, double invObsVarX, double invObsVarY, double unmatchedPenaltyConfThr) {
   this->pfNumParticles = numParticles;
   this->pfInitFieldMargin = initMargin;
   this->pfInitOwnHalfOnly = ownHalf;
@@ -117,8 +118,9 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->pfResolutionX = resX;
   this->pfResolutionY = resY;
   this->pfResolutionTheta = resTheta;
-  this->pfObsVarX = obsVarX;
-  this->pfObsVarY = obsVarY;
+  this->invPfObsVarX = invObsVarX;
+  this->invPfObsVarY = invObsVarY;
+  this->pfUnmatchedPenaltyConfThr = unmatchedPenaltyConfThr;
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
@@ -138,7 +140,7 @@ void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualTol
 void Locator::globalInitPF(Pose2D currentOdom) {
   double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
   double xMax = pfInitFieldMargin;
-  double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
+  double yMin = fieldDimensions.width / 2.0 - pfInitFieldMargin;
   double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
   double thetaMin = -M_PI;
   double thetaMax = M_PI;
@@ -148,27 +150,23 @@ void Locator::globalInitPF(Pose2D currentOdom) {
 
   int num = pfNumParticles;
   pfParticles.resize(num);
+  double thetaSpread = deg2rad(30.0);
 
-  // std::srand(std::time(0)); // No longer needed
-  for (int i = 0; i < num; i++) {
+  for (int i = 0; i < num / 2; i++) {
     pfParticles[i].x = uniformRandom(xMin, xMax);
     pfParticles[i].y = uniformRandom(yMin, yMax);
-    double thetaSpread = deg2rad(30.0);
-    double thetaCenter;
-
-    if (pfParticles[i].y > 0)
-      thetaCenter = -M_PI / 2.0;
-    else
-      thetaCenter = M_PI / 2.0;
+    double thetaCenter = -M_PI / 2.0;
 
     pfParticles[i].theta = toPInPI(thetaCenter + uniformRandom(-thetaSpread, thetaSpread));
     pfParticles[i].weight = 1.0 / num;
   }
-
-  w_slow = 0.0;
-  w_fast = 0.0;
-
-  hasSmoothedPose = false;
+  for (int i = num / 2; i < num; i++) {
+    pfParticles[i].x = uniformRandom(xMin, xMax);
+    pfParticles[i].y = -uniformRandom(yMin, yMax);
+    double thetaCenter = M_PI / 2.0;
+    pfParticles[i].theta = toPInPI(thetaCenter + uniformRandom(-thetaSpread, thetaSpread));
+    pfParticles[i].weight = 1.0 / num;
+  }
 }
 
 void Locator::predictPF(Pose2D currentOdomPose) {
@@ -203,10 +201,15 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double alpha3 = pfAlpha3;
   double alpha4 = pfAlpha4;
 
+  // Memoize Gaussian stddevs
+  double rot1_dev = alpha1 * fabs(rot1) + alpha2 * trans;
+  double trans_dev = alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2));
+  double rot2_dev = alpha1 * fabs(rot2) + alpha2 * trans;
+
   for (auto &p : pfParticles) {
-    double n_rot1 = rot1 + (gaussianRandom(0, alpha1 * fabs(rot1) + alpha2 * trans));
-    double n_trans = trans + (gaussianRandom(0, alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2))));
-    double n_rot2 = rot2 + (gaussianRandom(0, alpha1 * fabs(rot2) + alpha2 * trans));
+    double n_rot1 = rot1 + (gaussianRandom(0, rot1_dev));
+    double n_trans = trans + (gaussianRandom(0, trans_dev));
+    double n_rot2 = rot2 + (gaussianRandom(0, rot2_dev));
 
     p.x += n_trans * cos(p.theta + n_rot1);
     p.y += n_trans * sin(p.theta + n_rot1);
@@ -223,20 +226,32 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     return;
   }
 
-  double sigma = pfSensorNoiseR;
   double totalWeight = 0;
   double avgWeight = 0;
 
-  // Pre-categorize observations by type to avoid repeated looping
-  map<char, vector<FieldMarker>> obsByType;
+  // 1. Clear and reuse obsByTypeBuf
+  for (auto &kv : obsByTypeBuf) {
+    kv.second.clear();
+  }
   for (auto &m : markers) {
-    obsByType[m.type].push_back(m);
+    obsByTypeBuf[m.type].push_back(m);
   }
 
-  // Optimization: This could be done once at init if fieldMarkers doesn't change,
-  // but it's small enough to do here for safety.
+  // 2. Build tasks list to avoid map lookups inside particle loop
+  // Pair of pointers to constant vectors: (Observations, MapMarkers)
+  static vector<pair<const vector<FieldMarker> *, const vector<FieldMarker> *>> pfTasks;
+  pfTasks.clear();
+  pfTasks.reserve(obsByTypeBuf.size());
 
-  HungarianAlgorithm hungarian;
+  for (auto const &[type, obsList] : obsByTypeBuf) {
+    if (obsList.empty()) continue;
+    // Find corresponding map list
+    auto it = mapByType.find(type);
+    if (it != mapByType.end() && !it->second.empty()) { pfTasks.push_back({&obsList, &it->second}); }
+  }
+
+  double invVarX = this->invPfObsVarX;
+  double invVarY = this->invPfObsVarY;
 
   // Weight Update
   for (auto &p : pfParticles) {
@@ -251,47 +266,44 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
       Pose2D pose{p.x, p.y, p.theta};
       double logLikelihood = 0;
 
-      // Process each marker type independently
-      for (auto const &[type, obsList] : obsByType) {
+      double c = cos(pose.theta);
+      double s = sin(pose.theta);
 
-        // penalty 타입 걸러주기
-        if (mapByType.find(type) == mapByType.end()) continue;
+      auto getMahalanobisCost = [&](double dx_f, double dy_f) {
+        double dx_r = c * dx_f + s * dy_f;
+        double dy_r = -s * dx_f + c * dy_f;
+        return (dx_r * dx_r) * invVarX + (dy_r * dy_r) * invVarY;
+      };
 
-        const auto &mapList = mapByType[type];
+      // Iterate through pre-prepared tasks
+      for (const auto &task : pfTasks) {
+        const vector<FieldMarker> &obsList = *task.first;
+        const vector<FieldMarker> &mapList = *task.second;
 
-        // Construct Cost Matrix (Rows: Obs, Cols: Map)
         int nObs = obsList.size();
         int nMap = mapList.size();
 
-        if (nObs == 0) continue;
+        // Reuse buffer
+        obsInFieldBuf.clear();
+        obsInFieldBuf.reserve(nObs);
 
-        vector<FieldMarker> validObsInField;
-        validObsInField.reserve(nObs);
-
-        auto getMahalanobisCost = [&](double dx_f, double dy_f, double theta) {
-          double c = cos(theta);
-          double s = sin(theta);
-          double dx_r = c * dx_f + s * dy_f;
-          double dy_r = -s * dx_f + c * dy_f;
-
-          return (dx_r * dx_r) / pfObsVarX + (dy_r * dy_r) / pfObsVarY;
-        };
-        vector<FieldMarker> obsInField;
         for (auto &m_r : obsList) {
-          FieldMarker m_f = markerToFieldFrame(m_r, pose);
-          obsInField.push_back(m_f);
+          // Inline markerToFieldFrame with precalculated c, s
+          double ox = c * m_r.x - s * m_r.y + pose.x;
+          double oy = s * m_r.x + c * m_r.y + pose.y;
+          obsInFieldBuf.push_back(FieldMarker{m_r.type, ox, oy, m_r.confidence});
         }
-        double baseRejectCost = 9.0;
+
         int nCols = nMap + nObs;
 
-        // Resize reused buffer if needed (or just assign which handles resize)
+        // Reuse flatCostMatrix
         flatCostMatrix.assign(nObs * nCols, baseRejectCost);
 
         for (int i = 0; i < nObs; ++i) {
           for (int j = 0; j < nMap; ++j) {
-            double dx = obsInField[i].x - mapList[j].x;
-            double dy = obsInField[i].y - mapList[j].y;
-            flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy, pose.theta);
+            double dx = obsInFieldBuf[i].x - mapList[j].x;
+            double dy = obsInFieldBuf[i].y - mapList[j].y;
+            flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy);
           }
         }
 
@@ -303,7 +315,12 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
           int j = assignment[i];
           if (j < 0) continue;
 
-          if (j < nMap) sumCost += flatCostMatrix[i * nCols + j];
+          if (j < nMap) {
+            sumCost += flatCostMatrix[i * nCols + j];
+          } else {
+            // If confidence is high, penalize the particle for missing this observation
+            if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += 1.0; }
+          }
         }
         logLikelihood += -0.5 * sumCost;
       }
@@ -391,12 +408,11 @@ Pose2D Locator::getEstimatePF() {
 
   std::vector<Cluster> clusters;
 
-  // Sort
-  std::vector<int> sortedIndices(pfParticles.size());
-  std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
-  std::sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) { return pfParticles[a].weight > pfParticles[b].weight; });
+  // Max element instead of sort
+  auto bestIt = std::max_element(pfParticles.begin(), pfParticles.end(), [](const Particle &a, const Particle &b) { return a.weight < b.weight; });
 
-  return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
+  if (bestIt != pfParticles.end()) { return {bestIt->x, bestIt->y, bestIt->theta}; }
+  return {pfParticles[0].x, pfParticles[0].y, pfParticles[0].theta};
 
   // // Take weighted average of top 10 particles
   // double sumW = 0.0;

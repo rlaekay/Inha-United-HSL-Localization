@@ -11,17 +11,18 @@
 #include <limits>
 #include <rerun.hpp>
 
-#include "types.h"
-
-#include <map>
-#include <string>
+#include "utils/hungarian.h"
 
 using namespace std;
-namespace chr = std::chrono;
+ㅜ namespace chr = std::chrono;
 
 class Locator {
 public:
   double convergeTolerance = 0.2;
+  // ... (skip unchanged lines)
+  // We can't insert include easily with replace_file_content unless we match context.
+  // Let's do multiple chunks.
+
   double residualTolerance = 0.4;
   double maxIteration = 20;
   double muOffset = 2.0;
@@ -136,17 +137,25 @@ public:
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                    double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
                    double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4, double kldErr = 0.05, double kldZ = 2.33,
-                   int minParticles = 50, int maxParticles = 500, double resX = 0.2, double resY = 0.2, double resTheta = 0.17, double obsVarX = 0.04,
-                   double obsVarY = 0.04);
+                   int minParticles = 50, int maxParticles = 500, double resX = 0.2, double resY = 0.2, double resTheta = 0.17, double invObsVarX = 25.0,
+                   double invObsVarY = 25.0, double unmatchedPenaltyConfThr = 0.6);
 
-  double pfObsVarX = 0.04;
-  double pfObsVarY = 0.04;
+  // double pfObsVarX = 0.04;
+  // double pfObsVarY = 0.04;
+  double invPfObsVarX = 1.4; // 0.7
+  double invPfObsVarY = 4.0; // 0.25
+  double pfUnmatchedPenaltyConfThr = 0.6;
+
+  HungarianAlgorithm hungarian;
 
   // Pose Smoothing
   Pose2D smoothedPose = {0, 0, 0};
   bool hasSmoothedPose = false;
 
   vector<double> flatCostMatrix;
+  vector<FieldMarker> obsInFieldBuf;
+  map<char, vector<FieldMarker>> obsByTypeBuf;
+  double baseRejectCost = 4.0;
 };
 
 class Brain;
