@@ -12,20 +12,12 @@ public:
   HungarianAlgorithm() {}
   ~HungarianAlgorithm() {}
 
-  /**
-   * @brief Solve the assignment problem
-   * @param DistMatrix Input cost matrix (rows * cols)
-   * @param Assignment Output vector containing the column index for each row. -1 if unassigned.
-   * @return Minimum total cost
-   */
-
-  double Solve(const vector<double> &DistMatrix, int nRows, int nCols, vector<int> &Assignment) {
-    if (nRows == 0 || nCols == 0) return 0.0;
+  void Solve(const vector<double> &DistMatrix, int nRows, int nCols, vector<int> &Assignment) {
+    if (nRows == 0 || nCols == 0) return;
 
     Assignment.assign(nRows, -1);
     int n = max(nRows, nCols);
 
-    // Ensure buffers are large enough
     int sizeNeeded = n + 1;
     if (u.size() < sizeNeeded) {
       u.resize(sizeNeeded);
@@ -40,16 +32,13 @@ public:
   }
 
 private:
-  double SolveInternal(const vector<double> &DistMatrix, int n, int nRows, int nCols, vector<int> &Assignment) {
-    double cost = 0.0;
+  void SolveInternal(const vector<double> &DistMatrix, int n, int nRows, int nCols, vector<int> &Assignment) {
+    // double cost = 0.0;
 
-    // Reset helper arrays (fill not strictly needed if we init correctly in loop, but safer)
     fill(u.begin(), u.end(), 0.0);
     fill(v.begin(), v.end(), 0.0);
     fill(p.begin(), p.end(), 0);
     fill(way.begin(), way.end(), 0);
-
-    // --- Hungarian Algorithm (O(n^3)) ---
 
     for (int i = 1; i <= n; ++i) {
       p[0] = i;
@@ -106,12 +95,12 @@ private:
         int col = j - 1;
         if (row < nRows && col < nCols) {
           Assignment[row] = col;
-          cost += DistMatrix[row * nCols + col];
+          // cost += DistMatrix[row * nCols + col];
         }
       }
     }
 
-    return cost;
+    return;
   }
 
 private:

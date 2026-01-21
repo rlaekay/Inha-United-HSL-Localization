@@ -92,7 +92,7 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
                           double clusterThetaThr, double smoothAlpha, double kldErr, double kldZ, int minParticles, int maxParticles, double resX, double resY,
-                          double resTheta, double invObsVarX, double invObsVarY, double unmatchedPenaltyConfThr) {
+                          double resTheta, double invObsVarX, double invObsVarY, double unmatchedPenaltyConfThr, double pfEssThreshold) {
   this->pfNumParticles = numParticles;
   this->pfInitFieldMargin = initMargin;
   this->pfInitOwnHalfOnly = ownHalf;
@@ -121,6 +121,7 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->invPfObsVarX = invObsVarX;
   this->invPfObsVarY = invObsVarY;
   this->pfUnmatchedPenaltyConfThr = unmatchedPenaltyConfThr;
+  this->pfEssThreshold = essThreshold;
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
@@ -201,7 +202,6 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double alpha3 = pfAlpha3;
   double alpha4 = pfAlpha4;
 
-  // Memoize Gaussian stddevs
   double rot1_dev = alpha1 * fabs(rot1) + alpha2 * trans;
   double trans_dev = alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2));
   double rot2_dev = alpha1 * fabs(rot2) + alpha2 * trans;
@@ -227,33 +227,10 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
   }
 
   double totalWeight = 0;
-  double avgWeight = 0;
-
-  // 1. Clear and reuse obsByTypeBuf
-  for (auto &kv : obsByTypeBuf) {
-    kv.second.clear();
-  }
-  for (auto &m : markers) {
-    obsByTypeBuf[m.type].push_back(m);
-  }
-
-  // 2. Build tasks list to avoid map lookups inside particle loop
-  // Pair of pointers to constant vectors: (Observations, MapMarkers)
-  static vector<pair<const vector<FieldMarker> *, const vector<FieldMarker> *>> pfTasks;
-  pfTasks.clear();
-  pfTasks.reserve(obsByTypeBuf.size());
-
-  for (auto const &[type, obsList] : obsByTypeBuf) {
-    if (obsList.empty()) continue;
-    // Find corresponding map list
-    auto it = mapByType.find(type);
-    if (it != mapByType.end() && !it->second.empty()) { pfTasks.push_back({&obsList, &it->second}); }
-  }
 
   double invVarX = this->invPfObsVarX;
   double invVarY = this->invPfObsVarY;
 
-  // Weight Update
   for (auto &p : pfParticles) {
     double xMinConstraint = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
     double xMaxConstraint = fieldDimensions.length / 2.0 + pfInitFieldMargin;
@@ -264,10 +241,24 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
       p.weight = 0.0;
     } else {
       Pose2D pose{p.x, p.y, p.theta};
-      double logLikelihood = 0;
 
       double c = cos(pose.theta);
       double s = sin(pose.theta);
+
+      int nObs = markers.size();
+      int nMap = fieldMarkers.size();
+      int nCols = nMap + nObs;
+
+      obsInFieldBuf.clear();
+      obsInFieldBuf.reserve(nObs);
+
+      for (const auto &m_r : markers) {
+        double ox = c * m_r.x - s * m_r.y + pose.x;
+        double oy = s * m_r.x + c * m_r.y + pose.y;
+        obsInFieldBuf.push_back(FieldMarker{m_r.type, ox, oy, m_r.confidence});
+      }
+
+      flatCostMatrix.assign(nObs * nCols, baseRejectCost);
 
       auto getMahalanobisCost = [&](double dx_f, double dy_f) {
         double dx_r = c * dx_f + s * dy_f;
@@ -275,55 +266,38 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
         return (dx_r * dx_r) * invVarX + (dy_r * dy_r) * invVarY;
       };
 
-      // Iterate through pre-prepared tasks
-      for (const auto &task : pfTasks) {
-        const vector<FieldMarker> &obsList = *task.first;
-        const vector<FieldMarker> &mapList = *task.second;
-
-        int nObs = obsList.size();
-        int nMap = mapList.size();
-
-        // Reuse buffer
-        obsInFieldBuf.clear();
-        obsInFieldBuf.reserve(nObs);
-
-        for (auto &m_r : obsList) {
-          // Inline markerToFieldFrame with precalculated c, s
-          double ox = c * m_r.x - s * m_r.y + pose.x;
-          double oy = s * m_r.x + c * m_r.y + pose.y;
-          obsInFieldBuf.push_back(FieldMarker{m_r.type, ox, oy, m_r.confidence});
-        }
-
-        int nCols = nMap + nObs;
-
-        // Reuse flatCostMatrix
-        flatCostMatrix.assign(nObs * nCols, baseRejectCost);
-
-        for (int i = 0; i < nObs; ++i) {
-          for (int j = 0; j < nMap; ++j) {
-            double dx = obsInFieldBuf[i].x - mapList[j].x;
-            double dy = obsInFieldBuf[i].y - mapList[j].y;
-            flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy);
+      for (int i = 0; i < nObs; ++i) {
+        char obsType = obsInFieldBuf[i].type;
+        for (int j = 0; j < nMap; ++j) {
+          // Type Mismatch Check
+          if (fieldMarkers[j].type != obsType) {
+            flatCostMatrix[i * nCols + j] = std::numeric_limits<double>::max();
+            continue;
           }
+
+          double dx = obsInFieldBuf[i].x - fieldMarkers[j].x;
+          double dy = obsInFieldBuf[i].y - fieldMarkers[j].y;
+          flatCostMatrix[i * nCols + j] = getMahalanobisCost(dx, dy);
         }
-
-        vector<int> assignment;
-        double minTotalDistSq = hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
-
-        double sumCost = 0.0;
-        for (int i = 0; i < nObs; ++i) {
-          int j = assignment[i];
-          if (j < 0) continue;
-
-          if (j < nMap) {
-            sumCost += flatCostMatrix[i * nCols + j];
-          } else {
-            // If confidence is high, penalize the particle for missing this observation
-            if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += 1.0; }
-          }
-        }
-        logLikelihood += -0.5 * sumCost;
       }
+
+      vector<int> assignment;
+      hungarian.Solve(flatCostMatrix, nObs, nCols, assignment);
+
+      double sumCost = 0.0;
+      for (int i = 0; i < nObs; ++i) {
+        int j = assignment[i];
+        if (j < 0) continue;
+
+        if (j < nMap) {
+          // Matched to real marker
+          sumCost += flatCostMatrix[i * nCols + j];
+        } else {
+          // Matched to dummy (unmatched)
+          if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += baseRejectCost; }
+        }
+      }
+      double logLikelihood = -0.5 * sumCost;
 
       double likelihood = exp(logLikelihood);
       p.weight *= likelihood;
@@ -331,9 +305,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     totalWeight += p.weight;
   }
 
-  if (pfParticles.size() > 0) avgWeight = totalWeight / pfParticles.size();
-
-  // Normalize weights
+  // Normalization
   if (totalWeight < 1e-10) {
     for (auto &p : pfParticles)
       p.weight = 1.0 / pfParticles.size();
@@ -349,7 +321,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     sqSum += p.weight * p.weight;
   double ess = 1.0 / (sqSum + 1e-9);
 
-  if (ess < pfParticles.size() * 0.4) {
+  if (ess < pfParticles.size() * pfEssThreshold) {
     vector<Particle> newParticles;
     newParticles.reserve(maxParticles);
 
@@ -409,12 +381,12 @@ Pose2D Locator::getEstimatePF() {
   std::vector<Cluster> clusters;
 
   // Max element instead of sort
-  auto bestIt = std::max_element(pfParticles.begin(), pfParticles.end(), [](const Particle &a, const Particle &b) { return a.weight < b.weight; });
+  // auto bestIt = std::max_element(pfParticles.begin(), pfParticles.end(), [](const Particle &a, const Particle &b) { return a.weight < b.weight; });
 
-  if (bestIt != pfParticles.end()) { return {bestIt->x, bestIt->y, bestIt->theta}; }
-  return {pfParticles[0].x, pfParticles[0].y, pfParticles[0].theta};
+  // if (bestIt != pfParticles.end()) { return {bestIt->x, bestIt->y, bestIt->theta}; }
+  // return {pfParticles[0].x, pfParticles[0].y, pfParticles[0].theta};
 
-  // // Take weighted average of top 10 particles
+  // Take weighted average of top 10 particles
   // double sumW = 0.0;
   // double x = 0.0, y = 0.0, sumSin = 0.0, sumCos = 0.0;
 
@@ -435,74 +407,75 @@ Pose2D Locator::getEstimatePF() {
   //   return {pfParticles[sortedIndices[0]].x, pfParticles[sortedIndices[0]].y, pfParticles[sortedIndices[0]].theta};
   // }
 
-  // // clustering
-  // for (int idx : sortedIndices) {
-  //   auto &p = pfParticles[idx];
-  //   bool added = false;
-  //   for (auto &c : clusters) {
-  //     // 게이팅
-  //     double d = std::hypot(p.x - c.leaderX, p.y - c.leaderY);
-  //     double dTheta = std::fabs(toPInPI(p.theta - c.leaderTheta));
-  //     // weighted sum 구하기
-  //     if (d < pfClusterDistThr && dTheta < pfClusterThetaThr) {
-  //       c.totalWeight += p.weight;
-  //       c.xSum += p.x * p.weight;
-  //       c.ySum += p.y * p.weight;
-  //       c.cosSum += cos(p.theta) * p.weight;
-  //       c.sinSum += sin(p.theta) * p.weight;
-  //       added = true;
-  //       break;
-  //     }
-  //   }
-  //   // cluster에 포함되지 않았다면 다른 클러스터의 대장이 됨
-  //   if (!added) {
-  //     Cluster c;
-  //     c.totalWeight = p.weight;
-  //     c.xSum = p.x * p.weight;
-  //     c.ySum = p.y * p.weight;
-  //     c.cosSum = cos(p.theta) * p.weight;
-  //     c.sinSum += sin(p.theta) * p.weight;
-  //     c.leaderX = p.x;
-  //     c.leaderY = p.y;
-  //     c.leaderTheta = p.theta;
-  //     clusters.push_back(c);
-  //   }
-  // }
+  // sort by weight
+  std::sort(pfParticles.begin(), pfParticles.end(), [](const Particle &a, const Particle &b) { return a.weight > b.weight; });
+  // clustering
+  for (auto &p : pfParticles) {
+    bool added = false;
+    for (auto &c : clusters) {
+      // 게이팅
+      double d = std::hypot(p.x - c.leaderX, p.y - c.leaderY);
+      double dTheta = std::fabs(toPInPI(p.theta - c.leaderTheta));
+      // weighted sum 구하기
+      if (d < pfClusterDistThr && dTheta < pfClusterThetaThr) {
+        c.totalWeight += p.weight;
+        c.xSum += p.x * p.weight;
+        c.ySum += p.y * p.weight;
+        c.cosSum += cos(p.theta) * p.weight;
+        c.sinSum += sin(p.theta) * p.weight;
+        added = true;
+        break;
+      }
+    }
+    // cluster에 포함되지 않았다면 다른 클러스터의 대장이 됨
+    if (!added) {
+      Cluster c;
+      c.totalWeight = p.weight;
+      c.xSum = p.x * p.weight;
+      c.ySum = p.y * p.weight;
+      c.cosSum = cos(p.theta) * p.weight;
+      c.sinSum += sin(p.theta) * p.weight;
+      c.leaderX = p.x;
+      c.leaderY = p.y;
+      c.leaderTheta = p.theta;
+      clusters.push_back(c);
+    }
+  }
 
-  // // 가장 큰 가중치 합을 가진 클러스터 선택
-  // int bestClusterIdx = -1;
-  // double maxWeight = -1.0;
+  // 가장 큰 가중치 합을 가진 클러스터 선택
+  int bestClusterIdx = -1;
+  double maxWeight = -1.0;
 
-  // for (int i = 0; i < clusters.size(); i++) {
-  //   if (clusters[i].totalWeight > maxWeight) {
-  //     maxWeight = clusters[i].totalWeight;
-  //     bestClusterIdx = i;
-  //   }
-  // }
+  for (int i = 0; i < clusters.size(); i++) {
+    if (clusters[i].totalWeight > maxWeight) {
+      maxWeight = clusters[i].totalWeight;
+      bestClusterIdx = i;
+    }
+  }
 
-  // if (bestClusterIdx == -1) return {0, 0, 0};
+  if (bestClusterIdx == -1) return {0, 0, 0};
 
-  // // expected value
-  // Pose2D rawEstPose;
-  // auto &bestC = clusters[bestClusterIdx];
-  // if (bestC.totalWeight > 0) {
-  //   rawEstPose = Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)}; // 기댓값
-  // } else {
-  //   rawEstPose = Pose2D{bestC.leaderX, bestC.leaderY, bestC.leaderTheta};
-  // }
+  // expected value
+  Pose2D rawEstPose;
+  auto &bestC = clusters[bestClusterIdx];
+  if (bestC.totalWeight > 0) {
+    rawEstPose = Pose2D{bestC.xSum / bestC.totalWeight, bestC.ySum / bestC.totalWeight, atan2(bestC.sinSum, bestC.cosSum)}; // 기댓값
+  } else {
+    rawEstPose = Pose2D{bestC.leaderX, bestC.leaderY, bestC.leaderTheta};
+  }
 
-  // // EMA smoothing
-  // if (!hasSmoothedPose) {
-  //   smoothedPose = rawEstPose;
-  //   hasSmoothedPose = true;
-  // } else {
-  //   smoothedPose.x = pfSmoothAlpha * rawEstPose.x + (1.0 - pfSmoothAlpha) * smoothedPose.x;
-  //   smoothedPose.y = pfSmoothAlpha * rawEstPose.y + (1.0 - pfSmoothAlpha) * smoothedPose.y;
-  //   double diffTheta = toPInPI(rawEstPose.theta - smoothedPose.theta);
-  //   smoothedPose.theta = toPInPI(smoothedPose.theta + pfSmoothAlpha * diffTheta);
-  // }
+  // EMA smoothing
+  if (!hasSmoothedPose) {
+    smoothedPose = rawEstPose;
+    hasSmoothedPose = true;
+  } else {
+    smoothedPose.x = pfSmoothAlpha * rawEstPose.x + (1.0 - pfSmoothAlpha) * smoothedPose.x;
+    smoothedPose.y = pfSmoothAlpha * rawEstPose.y + (1.0 - pfSmoothAlpha) * smoothedPose.y;
+    double diffTheta = toPInPI(rawEstPose.theta - smoothedPose.theta);
+    smoothedPose.theta = toPInPI(smoothedPose.theta + pfSmoothAlpha * diffTheta);
+  }
 
-  // return smoothedPose;
+  return smoothedPose;
 }
 
 void Locator::setLog(rerun::RecordingStream *stream) { logger = stream; }

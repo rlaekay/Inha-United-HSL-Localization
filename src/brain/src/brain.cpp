@@ -141,8 +141,8 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.pf_zeromotion_rot_thresh", 0.002);
   declare_parameter<bool>("locator.pf_resample_when_stopped", false);
 
-  declare_parameter<double>("locator.pf_cluster_dist_gate", 0.3);
-  declare_parameter<double>("locator.pf_cluster_theta_gate", 20.0);
+  declare_parameter<double>("locator.pf_cluster_dist_thr", 0.3);
+  declare_parameter<double>("locator.pf_cluster_theta_thr", 20.0);
   declare_parameter<double>("locator.pf_smooth_alpha", 0.4);
 
   declare_parameter<double>("locator.kld_err", 0.05);
@@ -152,6 +152,7 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.pf_resolution_x", 0.2);
   declare_parameter<double>("locator.pf_resolution_y", 0.2);
   declare_parameter<double>("locator.pf_resolution_theta", 10.0);
+  declare_parameter<double>("locator.ess_threshold", 0.4);
 }
 
 Brain::~Brain() {}
@@ -174,7 +175,7 @@ void Brain::init() {
                        config->pfInjectionRatio, config->pfZeroMotionTransThresh, config->pfZeroMotionRotThresh, config->pfResampleWhenStopped,
                        config->pfClusterDistThr, config->pfClusterThetaThr, config->pfSmoothAlpha, config->kldErr, config->kldZ, config->minParticles,
                        config->maxParticles, config->pfResolutionX, config->pfResolutionY, config->pfResolutionTheta, config->pfInvObsVarX,
-                       config->pfInvObsVarY, config->pfUnmatchedPenaltyConfThr);
+                       config->pfInvObsVarY, config->pfUnmatchedPenaltyConfThr, config->essThreshold);
 
   locator->setLog(&log->log_tcp);
 
@@ -303,11 +304,12 @@ void Brain::loadConfig() {
   get_parameter("locator.pf_zeromotion_rot_thresh", config->pfZeroMotionRotThresh);
   get_parameter("locator.pf_resample_when_stopped", config->pfResampleWhenStopped);
 
-  get_parameter("locator.pf_cluster_dist_gate", config->pfClusterDistThr);
+  get_parameter("locator.pf_cluster_dist_thr", config->pfClusterDistThr);
   double clusterThetaDeg;
-  get_parameter("locator.pf_cluster_theta_gate", clusterThetaDeg);
+  get_parameter("locator.pf_cluster_theta_thr", clusterThetaDeg);
   config->pfClusterThetaThr = deg2rad(clusterThetaDeg);
   get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
+  get_parameter("locator.ess_threshold", config->essThreshold);
 
   // else
   YAML::Node vConfig = YAML::LoadFile(visionConfigPath);

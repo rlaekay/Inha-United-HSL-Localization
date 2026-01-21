@@ -120,6 +120,8 @@ public:
   double pfResolutionY = 0.2;             // 20cm
   double pfResolutionTheta = deg2rad(10); // 10 deg
 
+  double essThreshold = 0.4;
+
   bool soundEnable = false;
   string soundPack = "espeak";
 
