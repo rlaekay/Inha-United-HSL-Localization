@@ -2,6 +2,7 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <algorithm>
 #include <behaviortree_cpp/behavior_tree.h>
 #include <behaviortree_cpp/bt_factory.h>
 #include <chrono>
@@ -9,13 +10,14 @@
 #include <cstdlib>
 #include <ctime>
 #include <limits>
-#include <random>
+#include <map>
 #include <rerun.hpp>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "types.h"
-
-#include <map>
-#include <string>
+#include "utils/hungarian.h"
 
 using namespace std;
 namespace chr = std::chrono;
@@ -23,6 +25,10 @@ namespace chr = std::chrono;
 class Locator {
 public:
   double convergeTolerance = 0.2;
+  // ... (skip unchanged lines)
+  // We can't insert include easily with replace_file_content unless we match context.
+  // Let's do multiple chunks.
+
   double residualTolerance = 0.4;
   double maxIteration = 20;
   double muOffset = 2.0;
@@ -81,33 +87,16 @@ public:
   rerun::RecordingStream *logger = nullptr;
   void setLog(rerun::RecordingStream *stream);
 
-  // Main PF Parameters (Reduced)
-  int pfNumParticles;
-  double pfInitFieldMargin; // Margin around field for random init
-  double pfInitGlobalDist;  // (Optional) Max distance for global init
-
-  // Weights need to be carefully managed in MatrixXd context
-  // The matrix itself (4 x N) contains x, y, theta, weight
-  Eigen::MatrixXd pfParticles;
-  double avgWeight;
-  double totalWeight;
-
-  // -- Noise Parameters --
-  double initSigmaX, initSigmaY, initSigmaTheta;
-  double updateSigmaX, updateSigmaY, updateSigmaTheta;
-  double sigma; // likelihood sigma
-
-  // -- Movement Thresholds --
-  double distThreshold;
-  double angleThreshold;
-
-  // -- Flags --
-  bool isPFInitialized;
-  std::mutex pfMutex;
-
-  // -- Random Engine --
-  std::default_random_engine generator;
+  // MCL / Particle Filter State
+  struct Particle {
+    double x;
+    double y;
+    double theta;
+    double weight;
+  };
+  std::vector<Particle> pfParticles;
   Pose2D lastPFOdomPose = {0, 0, 0};
+  bool isPFInitialized = false;
   double pfSensorNoiseR = 1.0;
 
   // MCL Methods (PF Suffix)
@@ -124,6 +113,8 @@ public:
   double alpha_fast = 0.5;
   double pfInjectionRatio = 0.2;
 
+  int pfNumParticles = 150;
+  double pfInitFieldMargin = 1.0;
   bool pfInitOwnHalfOnly = true;
 
   double pfAlpha1 = 0.08;  // rot -> rot
@@ -149,14 +140,38 @@ public:
   double pfResolutionY = 0.2;
   double pfResolutionTheta = 10.0 * M_PI / 180.0;
 
+  int calcKLDTarget(int k);
+  uint64_t getBinKey(const Particle &p);
+
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                    double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
                    double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4, double kldErr = 0.05, double kldZ = 2.33,
-                   int minParticles = 50, int maxParticles = 500, double resX = 0.2, double resY = 0.2, double resTheta = 0.17);
+                   int minParticles = 50, int maxParticles = 500, double resX = 0.2, double resY = 0.2, double resTheta = 0.17, double invObsVarX = 25.0,
+                   double invObsVarY = 25.0, double unmatchedPenaltyConfThr = 0.6, double pfEssThreshold = 0.4);
+
+  // double pfObsVarX = 0.04;
+  // double pfObsVarY = 0.04;
+  double invPfObsVarX = 1.4; // 0.7
+  double invPfObsVarY = 4.0; // 0.25
+  double pfUnmatchedPenaltyConfThr = 0.6;
+
+  HungarianAlgorithm hungarian;
 
   // Pose Smoothing
   Pose2D smoothedPose = {0, 0, 0};
   bool hasSmoothedPose = false;
+
+  // Hysteresis State
+  Pose2D prevBestCentroid = {0, 0, 0};
+  Pose2D prevSecondCentroid = {0, 0, 0};
+  int freezeCounter = 0;
+
+  vector<double> flatCostMatrix;
+  vector<FieldMarker> obsInFieldBuf;
+  map<char, vector<FieldMarker>> obsByTypeBuf;
+  double baseRejectCost = 4.0;
+
+  double pfEssThreshold = 0.4;
 };
 
 class Brain;

@@ -12,24 +12,12 @@ public:
   HungarianAlgorithm() {}
   ~HungarianAlgorithm() {}
 
-  /**
-   * @brief Solve the assignment problem
-   * @param DistMatrix Input cost matrix (rows * cols)
-   * @param Assignment Output vector containing the column index for each row. -1 if unassigned.
-   * @return Minimum total cost
-   */
-  double Solve(const vector<vector<double>> &DistMatrix, vector<int> &Assignment) {
-    int nRows = DistMatrix.size();
-    if (nRows == 0) return 0.0;
-    int nCols = DistMatrix[0].size();
-    if (nCols == 0) return 0.0;
+  void Solve(const vector<double> &DistMatrix, int nRows, int nCols, vector<int> &Assignment) {
+    if (nRows == 0 || nCols == 0) return;
 
-    double cost = 0.0;
     Assignment.assign(nRows, -1);
-
     int n = max(nRows, nCols);
 
-    // Ensure buffers are large enough
     int sizeNeeded = n + 1;
     if (u.size() < sizeNeeded) {
       u.resize(sizeNeeded);
@@ -38,44 +26,27 @@ public:
       way.resize(sizeNeeded);
       minv.resize(sizeNeeded);
       used.resize(sizeNeeded);
-      // Resize cost matrix rows
-      costMatrix.resize(n);
-      for (auto &row : costMatrix)
-        row.resize(n);
-    }
-    // Even if size is enough, make sure costMatrix cols are enough (if n grew)
-    if (costMatrix.size() < n) { costMatrix.resize(n); }
-    for (int i = 0; i < n; ++i) {
-      if (costMatrix[i].size() < n) costMatrix[i].resize(n);
     }
 
-    // Fill cost matrix
-    // Initialize with 0 for padding (or strict requirement to match closest, 0 works for min cost general)
-    for (int i = 0; i < n; i++) {
-      for (int j = 0; j < n; j++) {
-        if (i < nRows && j < nCols) {
-          costMatrix[i][j] = DistMatrix[i][j];
-        } else {
-          costMatrix[i][j] = 0.0;
-        }
-      }
-    }
+    return SolveInternal(DistMatrix, n, nRows, nCols, Assignment);
+  }
 
-    // Reset helper arrays (fill not strictly needed if we init correctly in loop, but safer)
+private:
+  void SolveInternal(const vector<double> &DistMatrix, int n, int nRows, int nCols, vector<int> &Assignment) {
+    // double cost = 0.0;
+
     fill(u.begin(), u.end(), 0.0);
     fill(v.begin(), v.end(), 0.0);
     fill(p.begin(), p.end(), 0);
     fill(way.begin(), way.end(), 0);
-
-    // --- Hungarian Algorithm (O(n^3)) ---
 
     for (int i = 1; i <= n; ++i) {
       p[0] = i;
       int j0 = 0;
       // Reset minv and used for this iteration step
       // We only strictly need to reset up to n
-      fill(minv.begin(), minv.begin() + sizeNeeded, std::numeric_limits<double>::infinity());
-      fill(used.begin(), used.begin() + sizeNeeded, false);
+      fill(minv.begin(), minv.begin() + n + 1, std::numeric_limits<double>::infinity());
+      fill(used.begin(), used.begin() + n + 1, false);
 
       do {
         used[j0] = true;
@@ -84,7 +55,11 @@ public:
 
         for (int j = 1; j <= n; ++j) {
           if (!used[j]) {
-            double cur = costMatrix[i0 - 1][j - 1] - u[i0] - v[j];
+            double curCost = 0.0;
+            // Map 1-based i0, j to 0-based index and check bounds
+            if ((i0 - 1) < nRows && (j - 1) < nCols) { curCost = DistMatrix[(i0 - 1) * nCols + (j - 1)]; }
+
+            double cur = curCost - u[i0] - v[j];
             if (cur < minv[j]) {
               minv[j] = cur;
               way[j] = j0;
@@ -120,18 +95,17 @@ public:
         int col = j - 1;
         if (row < nRows && col < nCols) {
           Assignment[row] = col;
-          cost += DistMatrix[row][col];
+          // cost += DistMatrix[row * nCols + col];
         }
       }
     }
 
-    return cost;
+    return;
   }
 
 private:
   // Persistent buffers to avoid allocation
   vector<double> u, v, minv;
   vector<int> p, way;
-  vector<bool> used;
-  vector<vector<double>> costMatrix;
+  vector<uint8_t> used;
 };

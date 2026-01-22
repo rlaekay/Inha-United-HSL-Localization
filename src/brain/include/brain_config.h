@@ -76,7 +76,7 @@ public:
   double goalPostMargin = 0.4;
   double goalPostMarginForTouch = 0.1;
   double ballConfidenceThreshold;
-  bool treatPersonAsRobot = false;   
+  bool treatPersonAsRobot = false;
   double ballOutThreshold = 2.0;
   double tmBallDistThreshold = 4.0;
   bool limitNearBallSpeed = true;
@@ -97,6 +97,9 @@ public:
   double pfAlphaSlow = 0.05;
   double pfAlphaFast = 0.5;
   double pfInjectionRatio = 0.2;
+  double pfInvObsVarX = 1.4;
+  double pfInvObsVarY = 4.0;
+  double pfUnmatchedPenaltyConfThr = 0.6;
 
   double pfZeroMotionTransThresh = 0.001;
   double pfZeroMotionRotThresh = 0.002;
@@ -116,6 +119,8 @@ public:
   double pfResolutionX = 0.2;             // 20cm
   double pfResolutionY = 0.2;             // 20cm
   double pfResolutionTheta = deg2rad(10); // 10 deg
+
+  double essThreshold = 0.4;
 
   bool soundEnable = false;
   string soundPack = "espeak";

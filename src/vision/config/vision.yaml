@@ -54,6 +54,7 @@ segmentation_model:
   confidence_threshold: 0.3
   nms_threshold: 0.9
 use_depth: true
+use_imu: true
 ball_pose_estimator:
   use_depth: false
   radius: 0.109
