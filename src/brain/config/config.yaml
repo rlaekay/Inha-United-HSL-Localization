@@ -58,8 +58,8 @@ brain_node:
       
       pf_injection_ratio: 0.0001
 
-      pf_inv_obs_var_x: 1.0
-      pf_inv_obs_var_y: 1.5
+      pf_inv_obs_var_x: 0.5
+      pf_inv_obs_var_y: 0.7
 
       pf_unmatched_penalty_conf_thr: 0.1
 
@@ -71,7 +71,7 @@ brain_node:
       init_field_margin: 0.5
 
       ess_threshold: 0.3
-      num_particles: 150
+      num_particles: 450
 
 
       pf_cluster_dist_thr: 0.3
