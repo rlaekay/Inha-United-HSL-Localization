@@ -143,171 +143,16 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.pf_cluster_dist_thr", 0.3);
   declare_parameter<double>("locator.pf_cluster_theta_thr", 20.0);
   declare_parameter<double>("locator.pf_smooth_alpha", 0.4);
+  declare_parameter<double>("locator.pf_likelihood_scale", 1.0); // New parameter declaration
 
-  declare_parameter<double>("locator.kld_err", 0.05);
-  declare_parameter<double>("locator.kld_z", 2.33); // 99%
-  declare_parameter<int>("locator.min_particles", 50);
-  declare_parameter<int>("locator.max_particles", 500);
-  declare_parameter<double>("locator.pf_resolution_x", 0.2);
-  declare_parameter<double>("locator.pf_resolution_y", 0.2);
-  declare_parameter<double>("locator.pf_resolution_theta", 10.0);
-  declare_parameter<double>("locator.ess_threshold", 0.4);
-}
-
-Brain::~Brain() {}
-
-void Brain::init() {
-
-  config = std::make_shared<BrainConfig>();
-  loadConfig();
-
-  data = std::make_shared<BrainData>();
-  locator = std::make_shared<Locator>();
-  log = std::make_shared<BrainLog>(this);
-  tree = std::make_shared<BrainTree>(this);
-  client = std::make_shared<RobotClient>(this);
-  communication = std::make_shared<BrainCommunication>(this);
-
-  locator->init(config->fieldDimensions, config->pfMinMarkerCnt, config->pfMaxResidual, 2.0, config->rerunLogEnableTCP || config->rerunLogEnableFile);
-  locator->setPFParams(config->pfNumParticles, config->pfInitFieldMargin, config->pfInitOwnHalfOnly, config->pfSensorNoise,
-                       {config->pfAlpha1, config->pfAlpha2, config->pfAlpha3, config->pfAlpha4}, config->pfAlphaSlow, config->pfAlphaFast,
-                       config->pfInjectionRatio, config->pfZeroMotionTransThresh, config->pfZeroMotionRotThresh, config->pfResampleWhenStopped,
-                       config->pfClusterDistThr, config->pfClusterThetaThr, config->pfSmoothAlpha, config->kldErr, config->kldZ, config->minParticles,
-                       config->maxParticles, config->pfResolutionX, config->pfResolutionY, config->pfResolutionTheta, config->pfInvObsVarX,
-                       config->pfInvObsVarY, config->pfUnmatchedPenaltyConfThr, config->essThreshold);
-
-  locator->setLog(&log->log_tcp);
-
-  tree->init();
-
-  client->init();
-
-  log->prepare();
-
-  communication->initCommunication();
-
-  data->lastSuccessfulLocalizeTime = get_clock()->now();
-  data->timeLastDet = get_clock()->now();
-  data->timeLastLineDet = get_clock()->now();
-  data->timeLastGamecontrolMsg = get_clock()->now();
-  data->ball.timePoint = get_clock()->now();
-
-  auto now = get_clock()->now();
-  for (int i = 0; i < HL_MAX_NUM_PLAYERS; i++) {
-    data->tmStatus[i].isAlive = false;
-    data->tmStatus[i].timeLastCom = now;
-  }
-  data->tmLastCmdChangeTime = now;
-
-  detectionsSubscription = create_subscription<vision_interface::msg::Detections>("/booster_vision/detection", SUB_STATE_QUEUE_SIZE,
-                                                                                  bind(&Brain::detectionsCallback, this, _1));
-  subFieldLine = create_subscription<vision_interface::msg::LineSegments>("/booster_vision/line_segments", SUB_STATE_QUEUE_SIZE,
-                                                                          bind(&Brain::fieldLineCallback, this, _1));
-  odometerSubscription = create_subscription<booster_interface::msg::Odometer>("/odometer_state", SUB_STATE_QUEUE_SIZE,
-                                                                               bind(&Brain::odometerCallback, this, _1));
-  lowStateSubscription = create_subscription<booster_interface::msg::LowState>("/low_state", SUB_STATE_QUEUE_SIZE, bind(&Brain::lowStateCallback, this, _1));
-  headPoseSubscription = create_subscription<geometry_msgs::msg::Pose>("/head_pose", SUB_STATE_QUEUE_SIZE, bind(&Brain::headPoseCallback, this, _1));
-  recoveryStateSubscription = create_subscription<booster_interface::msg::RawBytesMsg>("fall_down_recovery_state", SUB_STATE_QUEUE_SIZE,
-                                                                                       bind(&Brain::recoveryStateCallback, this, _1));
-  pubLocalizedPose = create_publisher<geometry_msgs::msg::PoseStamped>("/localized_pose", 10);
-
-  if (config->rerunLogEnableFile || config->rerunLogEnableTCP) {
-    string imageTopic = get_parameter("vision.image_topic").as_string();
-    imageSubscription = create_subscription<sensor_msgs::msg::Image>(imageTopic, SUB_STATE_QUEUE_SIZE, bind(&Brain::imageCallback, this, _1));
-  }
-  string depthTopic = get_parameter("vision.depth_image_topic").as_string();
-  depthImageSubscription = create_subscription<sensor_msgs::msg::Image>(depthTopic, SUB_STATE_QUEUE_SIZE, bind(&Brain::depthImageCallback, this, _1));
-
-  pubSoundPlay = create_publisher<std_msgs::msg::String>("/play_sound", 10);
-  pubSpeak = create_publisher<std_msgs::msg::String>("/speak", 10);
-}
-
-void Brain::loadConfig() {
-  get_parameter("game.team_id", config->teamId);
-  get_parameter("game.player_id", config->playerId);
-  get_parameter("game.field_type", config->fieldType);
-  get_parameter("game.player_role", config->playerRole);
-  get_parameter("game.treat_person_as_robot", config->treatPersonAsRobot);
-  get_parameter("game.number_of_players", config->numOfPlayers);
-
-  get_parameter("robot.robot_height", config->robotHeight);
-  get_parameter("robot.odom_factor", config->robotOdomFactor);
-  get_parameter("robot.vx_factor", config->vxFactor);
-  get_parameter("robot.yaw_offset", config->yawOffset);
-  get_parameter("robot.vx_limit", config->vxLimit);
-  get_parameter("robot.vy_limit", config->vyLimit);
-  get_parameter("robot.vtheta_limit", config->vthetaLimit);
-
-  get_parameter("strategy.ball_confidence_threshold", config->ballConfidenceThreshold);
-  get_parameter("strategy.tm_ball_dist_threshold", config->tmBallDistThreshold);
-  get_parameter("strategy.limit_near_ball_speed", config->limitNearBallSpeed);
-  get_parameter("strategy.near_ball_speed_limit", config->nearBallSpeedLimit);
-  get_parameter("strategy.near_ball_range", config->nearBallRange);
-
-  get_parameter("obstacle_avoidance.collision_threshold", config->collisionThreshold);
-  get_parameter("obstacle_avoidance.safe_distance", config->safeDistance);
-  get_parameter("obstacle_avoidance.avoid_secs", config->avoidSecs);
-
-  get_parameter("locator.min_marker_count", config->pfMinMarkerCnt);
-  get_parameter("locator.max_residual", config->pfMaxResidual);
-
-  get_parameter("enable_com", config->enableCom);
-
-  // get_parameter("rerunLog.enable", config->rerunLogEnable);
-  get_parameter("rerunLog.enable_tcp", config->rerunLogEnableTCP);
-  get_parameter("rerunLog.server_ip", config->rerunLogServerIP);
-  get_parameter("rerunLog.enable_file", config->rerunLogEnableFile);
-  get_parameter("rerunLog.log_dir", config->rerunLogLogDir);
-  get_parameter("rerunLog.max_log_file_mins", config->rerunLogMaxFileMins);
-  get_parameter("rerunLog.img_interval", config->rerunLogImgInterval);
-
-  get_parameter("sound.enable", config->soundEnable);
-  get_parameter("sound.sound_pack", config->soundPack);
-
-  get_parameter("tree_file_path", config->treeFilePath);
-
-  get_parameter("vision.cam_pixel_width", config->camPixX);
-  get_parameter("vision.cam_pixel_height", config->camPixY);
-  double camDegX, camDegY;
-  get_parameter("vision.cam_fov_x", camDegX);
-  get_parameter("vision.cam_fov_y", camDegY);
-  config->camAngleX = deg2rad(camDegX);
-  config->camAngleY = deg2rad(camDegY);
-
-  // 从视觉 config 中加载相关参数
-  string visionConfigPath, visionConfigLocalPath;
-  get_parameter("vision_config_path", visionConfigPath);
-  get_parameter("vision_config_local_path", visionConfigLocalPath);
-  if (!filesystem::exists(visionConfigPath)) {
-    // 报错然后退出
-    RCLCPP_ERROR(get_logger(), "vision_config_path %s not exists", visionConfigPath.c_str());
-    exit(1);
-  }
-
-  get_parameter("locator.num_particles", config->pfNumParticles);
-  get_parameter("locator.init_field_margin", config->pfInitFieldMargin);
-  get_parameter("locator.init_own_half_only", config->pfInitOwnHalfOnly);
-  get_parameter("locator.pf_sensor_noise", config->pfSensorNoise);
-  get_parameter("locator.pf_alpha_1", config->pfAlpha1);
-  get_parameter("locator.pf_alpha_2", config->pfAlpha2);
-  get_parameter("locator.pf_alpha_3", config->pfAlpha3);
-  get_parameter("locator.pf_alpha_4", config->pfAlpha4);
-  get_parameter("locator.pf_alpha_slow", config->pfAlphaSlow);
-  get_parameter("locator.pf_alpha_fast", config->pfAlphaFast);
-  get_parameter("locator.pf_injection_ratio", config->pfInjectionRatio);
-  get_parameter("locator.pf_inv_obs_var_x", config->pfInvObsVarX);
-  get_parameter("locator.pf_inv_obs_var_y", config->pfInvObsVarY);
-  get_parameter("locator.pf_unmatched_penalty_conf_thr", config->pfUnmatchedPenaltyConfThr);
-
-  get_parameter("locator.pf_zeromotion_trans_thresh", config->pfZeroMotionTransThresh);
-  get_parameter("locator.pf_zeromotion_rot_thresh", config->pfZeroMotionRotThresh);
-  get_parameter("locator.pf_resample_when_stopped", config->pfResampleWhenStopped);
-
-  get_parameter("locator.pf_cluster_dist_thr", config->pfClusterDistThr);
   double clusterThetaDeg;
   get_parameter("locator.pf_cluster_theta_thr", clusterThetaDeg);
   config->pfClusterThetaThr = deg2rad(clusterThetaDeg);
+  get_parameter("locator.pf_unmatched_penalty_conf_thr", config->pfUnmatchedPenaltyConfThr);
+  get_parameter("locator.pf_likelihood_scale", config->pfLikelihoodScale);
   get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
+  get_parameter("locator.pf_zeromotion_trans_thresh", config->pfZeroMotionTransThresh);
+  get_parameter("locator.pf_zeromotion_rot_thresh", config->pfZeroMotionRotThresh);
   get_parameter("locator.ess_threshold", config->essThreshold);
 
   // else
@@ -1393,8 +1238,6 @@ void Brain::fieldLineCallback(const vision_interface::msg::LineSegments &msg) {
         label = "PenaltyArea";
       else if (line.type == LineType::GoalArea)
         label = "GoalArea";
-      else if (line.type == LineType::NA)
-        label = "NA";
       else
         label = "Other"; // should not see this label logged
 
@@ -2768,9 +2611,15 @@ void Brain::logStatusToConsole() {
 
     msg += getComLogString();
 
-    msg += format("DEBUG:\n\tcom: %s\tlogFile: %s\tlogTCP: %s\n\tvxFactor: %.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime: %.0fms",
+    msg += format("DEBUG:\n\tcom: %s\tlogFile: %s\tlogTCP: %s\n\tvxFactor: %.2f\tyawOffset: %.2f\n\tControlState: %d\n\tTickTime: %.0fms\n\tPF_Config: "
+                  "clusterDist: %.2f, clusterTheta: %.2f, smoothAlpha: %.2f, resX: %.2f, resY: %.2f, resTheta: %.2f, invObsVarX: %.2f, invObsVarY: %.2f, "
+                  "unmatchedPenaltyConf: %.2f, essThreshold: %.2f, likelihoodScale: %.2f",
                   config->enableCom ? "YES" : "NO", config->rerunLogEnableFile ? "YES" : "NO", config->rerunLogEnableTCP ? "YES" : "NO", config->vxFactor,
-                  config->yawOffset, tree->getEntry<int>("control_state"), msecsSince(data->lastTick));
+                  config->yawOffset, tree->getEntry<int>("control_state"), msecsSince(data->lastTick), config->pfClusterDistThr, config->pfClusterThetaThr,
+                  config->pfSmoothAlpha, config->pfResolutionX, config->pfResolutionY, config->pfResolutionTheta, config->pfInvObsVarX, config->pfInvObsVarY,
+                  config->pfUnmatchedPenaltyConfThr, config->essThreshold, config->pfLikelihoodScale);
+
+    locator->setLog(&log->log_tcp);
     prtDebug(msg);
   }
   data->lastTick = get_clock()->now();

@@ -100,6 +100,7 @@ public:
   double pfInvObsVarX = 1.4;
   double pfInvObsVarY = 4.0;
   double pfUnmatchedPenaltyConfThr = 0.6;
+  double pfLikelihoodScale = 0.3;
 
   double pfZeroMotionTransThresh = 0.001;
   double pfZeroMotionRotThresh = 0.002;
@@ -109,16 +110,6 @@ public:
   double pfClusterThetaThr = 0.35; // ~20 deg
 
   double pfSmoothAlpha = 0.4;
-
-  // KLD Sampling Parameters
-  double kldErr = 0.05;
-  double kldZ = 2.33; // 99% confidence (1-delta)
-  int minParticles = 50;
-  int maxParticles = 500;
-  // Resolution for binning
-  double pfResolutionX = 0.2;             // 20cm
-  double pfResolutionY = 0.2;             // 20cm
-  double pfResolutionTheta = deg2rad(10); // 10 deg
 
   double essThreshold = 0.4;
 

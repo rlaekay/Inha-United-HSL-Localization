@@ -62,6 +62,7 @@ brain_node:
       pf_inv_obs_var_y: 0.7
 
       pf_unmatched_penalty_conf_thr: 0.1
+      pf_likelihood_scale: 0.3
 
       pf_alpha_1: 0.003 #rot -> rot
       pf_alpha_2: 0.003 #trans -> rot
@@ -70,7 +71,7 @@ brain_node:
 
       init_field_margin: 0.5
 
-      ess_threshold: 0.3
+      ess_threshold: 0.00001
       num_particles: 450
 
 
