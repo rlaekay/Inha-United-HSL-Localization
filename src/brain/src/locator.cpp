@@ -616,9 +616,9 @@ Pose2D Locator::getEstimatePF() {
 
   // 4. Stability Check & Freeze
   double lc_dist = std::hypot(best->leader.x - best->centroid.x, best->leader.y - best->centroid.y);
-  if (lc_dist > 0.2) { // 20cm divergence -> Unstable
-    freezeCounter = 5;
-    // prtWarn(format("[PF] Instability Detected: L-C Dist=%.3f > 0.2 -> Freeze", lc_dist)); // Optional Log
+  if (lc_dist > 0.4) { // Relaxed to 40cm
+    freezeCounter = 2; // Reduced to 2 frames
+    // prtWarn(format("[PF] Instability Detected: L-C Dist=%.3f > 0.4 -> Freeze", lc_dist));
   }
 
   Pose2D result = best->centroid;
@@ -657,9 +657,9 @@ Pose2D Locator::getEstimatePF() {
     double jump = std::hypot(dx, dy) + (0.2 / 0.52) * dTheta;
 
     double alpha = pfSmoothAlpha;
-    if (jump > 0.5) {
-      alpha = 0.1; // Slow update on jump
-      prtWarn(format("[PF] JUMP DETECTED: dist=%.3f > 0.5 -> alpha=0.1", jump));
+    if (jump > 1.0) { // Relaxed to 1.0 metric
+      alpha = 0.2;    // Less aggressive penalty (was 0.1)
+      prtWarn(format("[PF] JUMP DETECTED: dist=%.3f > 1.0 -> alpha=0.2", jump));
     }
 
     smoothedPose.x = alpha * result.x + (1.0 - alpha) * smoothedPose.x;
