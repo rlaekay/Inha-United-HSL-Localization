@@ -236,9 +236,9 @@ void Locator::predictPF(Pose2D currentOdomPose) {
   double alpha3 = pfAlpha3;
   double alpha4 = pfAlpha4;
 
-  double rot1_dev = alpha1 * fabs(rot1) + alpha2 * trans;
-  double trans_dev = alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2));
-  double rot2_dev = alpha1 * fabs(rot2) + alpha2 * trans;
+  double rot1_dev = alpha1 * fabs(rot1) + alpha2 * trans + 0.0001;
+  double trans_dev = alpha3 * trans + alpha4 * (fabs(rot1) + fabs(rot2)) + 0.0001;
+  double rot2_dev = alpha1 * fabs(rot2) + alpha2 * trans + 0.0001;
 
   for (auto &p : pfParticles) {
     double n_rot1 = rot1 + (gaussianRandom(0, rot1_dev));
@@ -328,7 +328,7 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
         if (j < nMap) {
           sumCost += flatCostMatrix[i * nCols + j];
         } else {
-          if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += baseRejectCost; }
+          if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += flatCostMatrix[i * nCols + j]; }
         }
       }
       double logLikelihood = -0.5 * sumCost;
