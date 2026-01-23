@@ -129,7 +129,7 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->pfWeightDecayR1 = weightDecayR1;
   this->pfWeightDecayGamma = weightDecayGamma;
   if (weightDecayR1 > weightDecayR0) {
-    this->pfWeightDecayBeta = log(1.0 / weightDecayGamma) / (weightDecayR1 - weightDecayR0);
+    this->pfWeightDecayBeta = std::log(1.0 / weightDecayGamma) / (weightDecayR1 - weightDecayR0);
   } else {
     this->pfWeightDecayBeta = 0.0;
   }
