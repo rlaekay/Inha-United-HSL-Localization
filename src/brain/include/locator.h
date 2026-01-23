@@ -142,6 +142,14 @@ public:
   double pfSmoothAlpha = 0.4;
   double pfClusterRatioLimit = 0.9;
 
+  // Weight Decay Parameters
+  double pfWeightDecayR0 = 2.5;
+  double pfWeightDecayR1 = 4.0;
+  double pfWeightDecayGamma = 0.1;
+  double pfWeightDecayBeta = 0.0;
+
+  double pfSmoothAlpha = 0.4;
+
   // KLD State
 
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,

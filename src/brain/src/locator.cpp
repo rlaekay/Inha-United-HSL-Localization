@@ -93,7 +93,7 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
                           double clusterThetaThr, double smoothAlpha, double invObsVarX, double invObsVarY, double likelihoodWeight,
                           double unmatchedPenaltyConfThr, double pfEssThreshold, double injectionDist, double injectionAngle, double clusterMinWeight,
-                          int clusterMinSize, double hysteresisFactor) {
+                          double clusterRatioLimit, double weightDecayR0, double weightDecayR1, double weightDecayGamma) {
   this->pfNumParticles = numParticles;
   this->pfInitFieldMargin = initMargin;
   this->pfInitOwnHalfOnly = ownHalf;
@@ -122,6 +122,16 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->pfClusterMinWeight = clusterMinWeight;
   this->pfClusterMinSize = clusterMinSize;
   this->pfHysteresisFactor = hysteresisFactor;
+  this->pfClusterRatioLimit = clusterRatioLimit;
+
+  this->pfWeightDecayR0 = weightDecayR0;
+  this->pfWeightDecayR1 = weightDecayR1;
+  this->pfWeightDecayGamma = weightDecayGamma;
+  if (weightDecayR1 > weightDecayR0) {
+    this->pfWeightDecayBeta = log(1.0 / weightDecayGamma) / (weightDecayR1 - weightDecayR0);
+  } else {
+    this->pfWeightDecayBeta = 0.0;
+  }
 }
 
 void Locator::clusterParticles() {
