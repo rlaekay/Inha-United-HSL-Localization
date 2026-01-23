@@ -97,6 +97,8 @@ public:
   double pfAlphaSlow = 0.05;
   double pfAlphaFast = 0.5;
   double pfInjectionRatio = 0.2;
+  double pfInjectionDist = 3.0;
+  double pfInjectionAngle = M_PI / 4.0;
   double pfInvObsVarX = 1.4;
   double pfInvObsVarY = 4.0;
   double pfLikelihoodWeight = 0.3;

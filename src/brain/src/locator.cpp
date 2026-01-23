@@ -92,7 +92,7 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
                           double clusterThetaThr, double smoothAlpha, double invObsVarX, double invObsVarY, double likelihoodWeight,
-                          double unmatchedPenaltyConfThr, double pfEssThreshold) {
+                          double unmatchedPenaltyConfThr, double pfEssThreshold, double injectionDist, double injectionAngle) {
   this->pfNumParticles = numParticles;
   this->pfInitFieldMargin = initMargin;
   this->pfInitOwnHalfOnly = ownHalf;
@@ -116,6 +116,104 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->pfLikelihoodWeight = likelihoodWeight;
   this->pfUnmatchedPenaltyConfThr = unmatchedPenaltyConfThr;
   this->pfEssThreshold = pfEssThreshold;
+  this->pfInjectionDist = injectionDist;
+  this->pfInjectionAngle = injectionAngle;
+}
+
+void Locator::clusterParticles() {
+  // DBSCAN-like clustering
+  // 1. Reset IDs
+  for (auto &p : pfParticles)
+    p.id = -1;
+
+  int clusterId = 0;
+  std::vector<ParticleCluster> clusters;
+
+  for (size_t i = 0; i < pfParticles.size(); ++i) {
+    if (pfParticles[i].id != -1) continue; // Already visited
+
+    // Find neighbors
+    std::vector<int> neighbors;
+    for (size_t j = 0; j < pfParticles.size(); ++j) {
+      double dDist = sqrt(pow(pfParticles[i].x - pfParticles[j].x, 2) + pow(pfParticles[i].y - pfParticles[j].y, 2));
+      double dTheta = fabs(toPInPI(pfParticles[i].theta - pfParticles[j].theta));
+
+      if (dDist < pfClusterDistThr && dTheta < pfClusterThetaThr) { neighbors.push_back(j); }
+    }
+
+    // Identify core point (simplification: if it has neighbors, it starts a cluster)
+    // For true DBSCAN we need minPts, but here we just group everything connected.
+    // Let's use a simpler "density peak" approach or just group connected components.
+    // Given the task, let's just group connected components.
+
+    if (neighbors.empty()) continue; // Should at least include itself if it's a particle... wait, i is in neighbors.
+
+    pfParticles[i].id = clusterId;
+    ParticleCluster currentCluster;
+    currentCluster.indices.push_back(i);
+
+    // Expand cluster
+    std::vector<int> seedSet = neighbors;
+    for (size_t k = 0; k < seedSet.size(); ++k) {
+      int currIdx = seedSet[k];
+      if (pfParticles[currIdx].id == -1) {
+        pfParticles[currIdx].id = clusterId;
+        currentCluster.indices.push_back(currIdx);
+
+        // Optional: Expand further (transitive closure) - standard DBSCAN does this.
+        // For performance, let's do a limited expansion or just single-level if strictly density peak.
+        // But "connected components" is better for capturing the whole blob.
+        // Let's do full expansion.
+        for (size_t m = 0; m < pfParticles.size(); ++m) {
+          if (pfParticles[m].id != -1) continue;
+          double dDist2 = sqrt(pow(pfParticles[currIdx].x - pfParticles[m].x, 2) + pow(pfParticles[currIdx].y - pfParticles[m].y, 2));
+          double dTheta2 = fabs(toPInPI(pfParticles[currIdx].theta - pfParticles[m].theta));
+          if (dDist2 < pfClusterDistThr && dTheta2 < pfClusterThetaThr) {
+            pfParticles[m].id = clusterId;
+            currentCluster.indices.push_back(m);
+            seedSet.push_back(m); // Add to search queue
+          }
+        }
+      } else if (pfParticles[currIdx].id == -1) { // Logic error in standard DBSCAN check?
+                                                  // If undefined, label it. If defined as NOISE (not used here), label it.
+                                                  // modifying seedSet while iterating is safe with index access? Yes, std::vector
+      }
+    }
+
+    // Compute Cluster stats
+    double wSum = 0;
+    double xSum = 0;
+    double ySum = 0;
+    double sinSum = 0;
+    double cosSum = 0;
+
+    for (int idx : currentCluster.indices) {
+      double w = pfParticles[idx].weight;
+      wSum += w;
+      xSum += w * pfParticles[idx].x;
+      ySum += w * pfParticles[idx].y;
+      sinSum += w * sin(pfParticles[idx].theta);
+      cosSum += w * cos(pfParticles[idx].theta);
+    }
+
+    if (wSum > 0) {
+      currentCluster.weightSum = wSum;
+      currentCluster.meanPose.x = xSum / wSum;
+      currentCluster.meanPose.y = ySum / wSum;
+      currentCluster.meanPose.theta = atan2(sinSum, cosSum);
+      clusters.push_back(currentCluster);
+      clusterId++;
+    }
+  }
+
+  // If no clusters found (shouldn't happen if particles exist), fallback
+  if (clusters.empty()) return;
+
+  // Find best cluster
+  auto bestClusterIt = std::max_element(clusters.begin(), clusters.end(),
+                                        [](const ParticleCluster &a, const ParticleCluster &b) { return a.weightSum < b.weightSum; });
+
+  bestPose = bestClusterIt->meanPose; // Temporary storage or directly use in getEstimate
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {
@@ -349,10 +447,18 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
 
       // Random Injection
       if (uniformRandom(0.0, 1.0) < pfInjectionRatio) {
+        // Constrained Injection
+        double iDist = pfInjectionDist;
+        double iAngle = pfInjectionAngle;
 
-        pNew.x = uniformRandom(xMin, xMax);
-        pNew.y = uniformRandom(yMin, yMax);
-        pNew.theta = toPInPI(uniformRandom(tMin, tMax));
+        // Clamp to field boundaries
+        double rx = uniformRandom(-iDist, iDist);
+        double ry = uniformRandom(-iDist, iDist);
+        double rth = uniformRandom(-iAngle, iAngle);
+
+        pNew.x = std::clamp(smoothedPose.x + rx, xMin, xMax);
+        pNew.y = std::clamp(smoothedPose.y + ry, yMin, yMax);
+        pNew.theta = toPInPI(smoothedPose.theta + rth);
         pNew.weight = 1.0;
       } else {
         // Resample from CDF
@@ -376,21 +482,11 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
 Pose2D Locator::getEstimatePF() {
   if (pfParticles.empty()) return {0, 0, 0};
 
-  // 1. Filter Outliers: Top-K% Selection
-  // We only consider the top 10% of particles by weight to ignore the long tail of noise.
-  double keep_ratio = 0.07;
-  size_t N = pfParticles.size();
-  size_t K = std::max<size_t>(1, N * keep_ratio);
+  // 1. Cluster Particles
+  clusterParticles();
 
-  // nth_element puts the top K elements in [0, K)
-  // Note: We want LARGER weights, so we use a.weight > b.weight as the comparator.
-  std::nth_element(pfParticles.begin(), pfParticles.begin() + K, pfParticles.end(), [](const Particle &a, const Particle &b) { return a.weight > b.weight; });
-
-  // 2. Select Best Particle
-  // Find the particle with the maximum weight among the top K.
-  auto bestIt = std::max_element(pfParticles.begin(), pfParticles.begin() + K, [](const Particle &a, const Particle &b) { return a.weight < b.weight; });
-
-  Pose2D raw = {bestIt->x, bestIt->y, bestIt->theta};
+  // 2. Use Best Cluster Mean
+  Pose2D raw = bestPose; // bestPose is updated by clusterParticles
 
   // 3. EMA Smoothing
   if (!hasSmoothedPose) {

@@ -93,6 +93,12 @@ public:
     double y;
     double theta;
     double weight;
+    int id = -1; // For clustering
+  };
+  struct ParticleCluster {
+    std::vector<int> indices;
+    double weightSum = 0.0;
+    Pose2D meanPose = {0, 0, 0};
   };
   std::vector<Particle> pfParticles;
   Pose2D lastPFOdomPose = {0, 0, 0};
@@ -104,6 +110,7 @@ public:
   void predictPF(Pose2D currentOdomPose);
   void correctPF(const vector<FieldMarker> markers);
   Pose2D getEstimatePF();
+  void clusterParticles(); // helper for getEstimatePF
   bool getIsPFInitialized() const { return isPFInitialized; }
 
   // Augmented MCL State
@@ -136,7 +143,8 @@ public:
   void setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                    double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
                    double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4, double invObsVarX = 25.0, double invObsVarY = 25.0,
-                   double likelihoodWeight = 0.3, double unmatchedPenaltyConfThr = 0.6, double pfEssThreshold = 0.4);
+                   double likelihoodWeight = 0.3, double unmatchedPenaltyConfThr = 0.6, double pfEssThreshold = 0.4, double injectionDist = 3.0,
+                   double injectionAngle = 0.785);
 
   // double pfObsVarX = 0.04;
   // double pfObsVarY = 0.04;
@@ -144,6 +152,10 @@ public:
   double invPfObsVarY = 4.0; // 0.25
   double pfLikelihoodWeight = 0.3;
   double pfUnmatchedPenaltyConfThr = 0.6;
+
+  // Constrained Injection
+  double pfInjectionDist = 3.0;
+  double pfInjectionAngle = M_PI / 4.0;
 
   HungarianAlgorithm hungarian;
 

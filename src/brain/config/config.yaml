@@ -57,6 +57,8 @@ brain_node:
       pf_smooth_alpha: 1.0
       
       pf_injection_ratio: 0.00001
+      pf_injection_dist: 3.0
+      pf_injection_angle: 0.785 # 45 degrees
 
       pf_inv_obs_var_x: 1.0
       pf_inv_obs_var_y: 6.0

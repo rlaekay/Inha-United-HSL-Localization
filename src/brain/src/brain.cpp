@@ -174,7 +174,7 @@ void Brain::init() {
                        {config->pfAlpha1, config->pfAlpha2, config->pfAlpha3, config->pfAlpha4}, config->pfAlphaSlow, config->pfAlphaFast,
                        config->pfInjectionRatio, config->pfZeroMotionTransThresh, config->pfZeroMotionRotThresh, config->pfResampleWhenStopped,
                        config->pfClusterDistThr, config->pfClusterThetaThr, config->pfSmoothAlpha, config->pfInvObsVarX, config->pfInvObsVarY,
-                       config->pfLikelihoodWeight, config->pfUnmatchedPenaltyConfThr, config->essThreshold);
+                       config->pfLikelihoodWeight, config->pfUnmatchedPenaltyConfThr, config->essThreshold, config->pfInjectionDist, config->pfInjectionAngle);
 
   locator->setLog(&log->log_tcp);
 
@@ -295,6 +295,8 @@ void Brain::loadConfig() {
   get_parameter("locator.pf_alpha_slow", config->pfAlphaSlow);
   get_parameter("locator.pf_alpha_fast", config->pfAlphaFast);
   get_parameter("locator.pf_injection_ratio", config->pfInjectionRatio);
+  get_parameter("locator.pf_injection_dist", config->pfInjectionDist);
+  get_parameter("locator.pf_injection_angle", config->pfInjectionAngle);
   get_parameter("locator.pf_inv_obs_var_x", config->pfInvObsVarX);
   get_parameter("locator.pf_inv_obs_var_y", config->pfInvObsVarY);
   get_parameter("locator.pf_likelihood_weight", config->pfLikelihoodWeight);
