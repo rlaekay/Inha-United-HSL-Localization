@@ -314,6 +314,11 @@ void Brain::loadConfig() {
   get_parameter("locator.pf_cluster_min_weight", config->pfClusterMinWeight);
   get_parameter("locator.pf_cluster_min_size", config->pfClusterMinSize);
   get_parameter("locator.pf_hysteresis_factor", config->pfHysteresisFactor);
+  get_parameter("locator.pf_cluster_ratio_limit", config->pfClusterRatioLimit);
+
+  get_parameter("locator.pf_weight_decay_r0", config->pfWeightDecayR0);
+  get_parameter("locator.pf_weight_decay_r1", config->pfWeightDecayR1);
+  get_parameter("locator.pf_weight_decay_gamma", config->pfWeightDecayGamma);
 
   get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
   get_parameter("locator.ess_threshold", config->essThreshold);

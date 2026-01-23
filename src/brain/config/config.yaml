@@ -81,8 +81,13 @@ brain_node:
       pf_cluster_dist_thr: 0.2
       pf_cluster_theta_thr: 0.18
       pf_cluster_min_weight: 0.05
-      pf_cluster_min_size: 3
-      pf_hysteresis_factor: 1.2 
+      pf_cluster_min_size: 10
+      pf_hysteresis_factor: 1.2
+      pf_cluster_ratio_limit: 0.8
+      
+      pf_weight_decay_r0: 2.5
+      pf_weight_decay_r1: 4.0
+      pf_weight_decay_gamma: 0.1
 
       pf_sensor_noise: 1.5
       min_marker_count: 5

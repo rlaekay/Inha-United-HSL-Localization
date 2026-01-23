@@ -133,12 +133,29 @@ void Locator::clusterParticles() {
   int clusterId = 0;
   std::vector<ParticleCluster> clusters;
 
-  for (size_t i = 0; i < pfParticles.size(); ++i) {
+  // OPTIMIZATION: Weight Gating
+  // Sort particles by weight descending
+  std::vector<int> sortedIndices(pfParticles.size());
+  std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+  std::sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) { return pfParticles[a].weight > pfParticles[b].weight; });
+
+  // Select top active particles until ratio limit is reached
+  std::vector<int> activeIndices;
+  double accumWeight = 0.0;
+  for (int idx : sortedIndices) {
+    activeIndices.push_back(idx);
+    accumWeight += pfParticles[idx].weight;
+    if (accumWeight >= pfClusterRatioLimit) break;
+  }
+
+  // Only cluster efficient subset
+  for (int i : activeIndices) {
     if (pfParticles[i].id != -1) continue; // Already visited
 
-    // Find neighbors
+    // Find neighbors - search only within active subset for efficiency?
+    // User asked to "gate the particles", implying we ignore the rest.
     std::vector<int> neighbors;
-    for (size_t j = 0; j < pfParticles.size(); ++j) {
+    for (int j : activeIndices) {
       double dDist = sqrt(pow(pfParticles[i].x - pfParticles[j].x, 2) + pow(pfParticles[i].y - pfParticles[j].y, 2));
       double dTheta = fabs(toPInPI(pfParticles[i].theta - pfParticles[j].theta));
 
@@ -168,7 +185,8 @@ void Locator::clusterParticles() {
         // For performance, let's do a limited expansion or just single-level if strictly density peak.
         // But "connected components" is better for capturing the whole blob.
         // Let's do full expansion.
-        for (size_t m = 0; m < pfParticles.size(); ++m) {
+        // Let's do full expansion (but only within activeIndices to keep O(N^2) small)
+        for (int m : activeIndices) {
           if (pfParticles[m].id != -1) continue;
           double dDist2 = sqrt(pow(pfParticles[currIdx].x - pfParticles[m].x, 2) + pow(pfParticles[currIdx].y - pfParticles[m].y, 2));
           double dTheta2 = fabs(toPInPI(pfParticles[currIdx].theta - pfParticles[m].theta));
@@ -428,10 +446,22 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
         int j = assignment[i];
         if (j < 0) continue; // Should not happen
 
+        // Distance Dependent Weight Decay
+        double r = sqrt(pow(obsInFieldBuf[i].x - pose.x, 2) + pow(obsInFieldBuf[i].y - pose.y, 2));
+        // Wait, obsInFieldBuf is in Field Frame. Distance to pose (robot in field frame) is correct to get range.
+        // Actually simpler: markers passed to correctPF are in ROBOT FRAME.
+        // But here we are iterating over `obsInFieldBuf` or `markers`?
+        // Loop is over `nObs` which matches `obsInFieldBuf` and `markers`.
+        // `markers` is const vector<FieldMarker> passed to correctPF. Matches i.
+        double r_robot = sqrt(pow(markers[i].x, 2) + pow(markers[i].y, 2));
+
+        double distWeight = 1.0;
+        if (r_robot > pfWeightDecayR0) { distWeight = exp(-pfWeightDecayBeta * (r_robot - pfWeightDecayR0)); }
+
         if (j < nMap) {
-          sumCost += flatCostMatrix[i * nCols + j];
+          sumCost += distWeight * flatCostMatrix[i * nCols + j];
         } else {
-          if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += flatCostMatrix[i * nCols + j]; }
+          if (obsInFieldBuf[i].confidence > this->pfUnmatchedPenaltyConfThr) { sumCost += distWeight * flatCostMatrix[i * nCols + j]; }
         }
       }
       double logLikelihood = -0.5 * sumCost;

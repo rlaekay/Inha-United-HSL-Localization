@@ -113,6 +113,12 @@ public:
   double pfClusterMinWeight = 0.05;
   int pfClusterMinSize = 3;
   double pfHysteresisFactor = 1.2;
+  double pfClusterRatioLimit = 0.9;
+
+  // Weight Decay Parameters
+  double pfWeightDecayR0 = 2.5;
+  double pfWeightDecayR1 = 4.0;
+  double pfWeightDecayGamma = 0.1;
 
   double pfSmoothAlpha = 0.4;
 
