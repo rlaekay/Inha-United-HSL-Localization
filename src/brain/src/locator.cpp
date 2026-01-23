@@ -92,7 +92,8 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
                           double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
                           double clusterThetaThr, double smoothAlpha, double invObsVarX, double invObsVarY, double likelihoodWeight,
-                          double unmatchedPenaltyConfThr, double pfEssThreshold, double injectionDist, double injectionAngle) {
+                          double unmatchedPenaltyConfThr, double pfEssThreshold, double injectionDist, double injectionAngle, double clusterMinWeight,
+                          int clusterMinSize, double hysteresisFactor) {
   this->pfNumParticles = numParticles;
   this->pfInitFieldMargin = initMargin;
   this->pfInitOwnHalfOnly = ownHalf;
@@ -118,6 +119,9 @@ void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, dou
   this->pfEssThreshold = pfEssThreshold;
   this->pfInjectionDist = injectionDist;
   this->pfInjectionAngle = injectionAngle;
+  this->pfClusterMinWeight = clusterMinWeight;
+  this->pfClusterMinSize = clusterMinSize;
+  this->pfHysteresisFactor = hysteresisFactor;
 }
 
 void Locator::clusterParticles() {
@@ -196,7 +200,8 @@ void Locator::clusterParticles() {
       cosSum += w * cos(pfParticles[idx].theta);
     }
 
-    if (wSum > 0) {
+    // FILTERING: Ignore small or weak clusters
+    if (wSum > pfClusterMinWeight && currentCluster.indices.size() >= pfClusterMinSize) {
       currentCluster.weightSum = wSum;
       currentCluster.meanPose.x = xSum / wSum;
       currentCluster.meanPose.y = ySum / wSum;
@@ -210,10 +215,50 @@ void Locator::clusterParticles() {
   if (clusters.empty()) return;
 
   // Find best cluster
-  auto bestClusterIt = std::max_element(clusters.begin(), clusters.end(),
-                                        [](const ParticleCluster &a, const ParticleCluster &b) { return a.weightSum < b.weightSum; });
+  // Hysteresis Logic
+  // 1. Identify "Active" cluster (closest to smoothedPose)
+  ParticleCluster *activeCluster = nullptr;
+  double minDist = std::numeric_limits<double>::infinity();
 
-  bestPose = bestClusterIt->meanPose; // Temporary storage or directly use in getEstimate
+  // Also track global best
+  ParticleCluster *globalBest = nullptr;
+  double maxWeight = -1.0;
+
+  for (auto &c : clusters) {
+    if (c.weightSum > maxWeight) {
+      maxWeight = c.weightSum;
+      globalBest = &c;
+    }
+
+    if (hasSmoothedPose) {
+      double d = sqrt(pow(c.meanPose.x - smoothedPose.x, 2) + pow(c.meanPose.y - smoothedPose.y, 2));
+      if (d < 1.0) { // arbitrary proximity threshold to be considered "active".
+        if (d < minDist) {
+          minDist = d;
+          activeCluster = &c;
+        }
+      }
+    }
+  }
+
+  // 2. Select between Active and Global Best
+  if (activeCluster && globalBest) {
+    if (globalBest == activeCluster) {
+      bestPose = activeCluster->meanPose;
+    } else {
+      // Switch only if global best is significantly better
+      if (globalBest->weightSum > activeCluster->weightSum * pfHysteresisFactor) {
+        bestPose = globalBest->meanPose;
+      } else {
+        bestPose = activeCluster->meanPose;
+      }
+    }
+  } else if (globalBest) {
+    bestPose = globalBest->meanPose;
+  } else {
+    // No valid clusters (should correspond to filters dropping everything)
+    return;
+  }
 }
 
 void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualToleranceParam, double muOffestParam, bool enableLogParam, string logIPParam) {

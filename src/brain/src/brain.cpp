@@ -310,6 +310,11 @@ void Brain::loadConfig() {
   double clusterThetaDeg;
   get_parameter("locator.pf_cluster_theta_thr", clusterThetaDeg);
   config->pfClusterThetaThr = deg2rad(clusterThetaDeg);
+
+  get_parameter("locator.pf_cluster_min_weight", config->pfClusterMinWeight);
+  get_parameter("locator.pf_cluster_min_size", config->pfClusterMinSize);
+  get_parameter("locator.pf_hysteresis_factor", config->pfHysteresisFactor);
+
   get_parameter("locator.pf_smooth_alpha", config->pfSmoothAlpha);
   get_parameter("locator.ess_threshold", config->essThreshold);
 

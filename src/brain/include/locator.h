@@ -136,6 +136,12 @@ public:
 
   double pfClusterDistThr = 0.3;
   double pfClusterThetaThr = 0.35; // ~20 deg
+  double pfClusterMinWeight = 0.05;
+  int pfClusterMinSize = 3;
+  double pfHysteresisFactor = 1.2;
+  double pfClusterMinWeight = 0.05;
+  int pfClusterMinSize = 3;
+  double pfHysteresisFactor = 1.2;
   double pfSmoothAlpha = 0.4;
 
   // KLD State
@@ -144,7 +150,7 @@ public:
                    double injectionRatio, double zeroMotionTransThresh = 0.001, double zeroMotionRotThresh = 0.002, bool resampleWhenStopped = false,
                    double clusterDistThr = 0.3, double clusterThetaThr = 0.35, double smoothAlpha = 0.4, double invObsVarX = 25.0, double invObsVarY = 25.0,
                    double likelihoodWeight = 0.3, double unmatchedPenaltyConfThr = 0.6, double pfEssThreshold = 0.4, double injectionDist = 3.0,
-                   double injectionAngle = 0.785);
+                   double injectionAngle = 0.785, double clusterMinWeight = 0.05, int clusterMinSize = 3, double hysteresisFactor = 1.2);
 
   // double pfObsVarX = 0.04;
   // double pfObsVarY = 0.04;
