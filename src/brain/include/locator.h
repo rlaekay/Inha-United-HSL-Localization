@@ -139,9 +139,6 @@ public:
   double pfClusterMinWeight = 0.05;
   int pfClusterMinSize = 3;
   double pfHysteresisFactor = 1.2;
-  double pfClusterMinWeight = 0.05;
-  int pfClusterMinSize = 3;
-  double pfHysteresisFactor = 1.2;
   double pfSmoothAlpha = 0.4;
 
   // KLD State
