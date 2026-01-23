@@ -341,8 +341,8 @@ void Locator::correctPF(const vector<FieldMarker> markers) {
     double xMax = fieldDimensions.length / 2.0 + pfInitFieldMargin;
     double yMin = -fieldDimensions.width / 2.0 - pfInitFieldMargin;
     double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
-    double tMin = brain->data->robotPoseToField.theta - M_PI / 4;
-    double tMax = brain->data->robotPoseToField.theta + M_PI / 4;
+    double tMin = smoothedPose.theta - M_PI / 4;
+    double tMax = smoothedPose.theta + M_PI / 4;
 
     for (int i = 0; i < pfNumParticles; ++i) {
       Particle pNew;
