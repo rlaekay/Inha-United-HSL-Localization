@@ -261,7 +261,7 @@ void Locator::clusterParticles() {
 
     if (hasSmoothedPose) {
       double d = sqrt(pow(c.meanPose.x - smoothedPose.x, 2) + pow(c.meanPose.y - smoothedPose.y, 2));
-      if (d < 1.0) { // arbitrary proximity threshold to be considered "active".
+      if (d < 0.5) { // arbitrary proximity threshold to be considered "active".
         if (d < minDist) {
           minDist = d;
           activeCluster = &c;

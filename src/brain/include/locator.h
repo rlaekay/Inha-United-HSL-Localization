@@ -183,7 +183,7 @@ public:
   vector<double> flatCostMatrix;
   vector<FieldMarker> obsInFieldBuf;
   map<char, vector<FieldMarker>> obsByTypeBuf;
-  double baseRejectCost = 4.0;
+  double baseRejectCost = 8.0;
 
   double pfEssThreshold = 0.4;
 };
