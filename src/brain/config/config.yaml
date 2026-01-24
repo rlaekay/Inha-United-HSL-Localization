@@ -54,18 +54,18 @@ brain_node:
       chase_ao_safe_dist: 3.5 
 
     locator:
-      pf_smooth_alpha: 0.85
+      pf_smooth_alpha: 0.6
       
       pf_injection_ratio: 0.01
-      pf_injection_dist: 3.0
+      pf_injection_dist: 5.0
       pf_injection_angle: 0.785 # 45 degrees
 
       pf_inv_obs_var_x: 6.0
       pf_inv_obs_var_y: 8.0
 
-      pf_likelihood_weight: 0.7
+      pf_likelihood_weight: 0.2
 
-      pf_unmatched_penalty_conf_thr: 0.1
+      pf_unmatched_penalty_conf_thr: 0.5
 
       pf_alpha_1: 0.003 #rot -> rot
       pf_alpha_2: 0.003 #trans -> rot
@@ -74,20 +74,19 @@ brain_node:
 
       init_field_margin: 0.5
 
-      ess_threshold: 0.4
-      num_particles: 100
+      ess_threshold: 0.2
+      num_particles: 70
 
 
       pf_cluster_dist_thr: 0.2
       pf_cluster_theta_thr: 0.18
       pf_cluster_min_weight: 0.05
       pf_cluster_min_size: 40
-      pf_hysteresis_factor: 4.0
+      pf_hysteresis_factor: 10.0
       pf_cluster_ratio_limit: 0.8
       
-      pf_weight_decay_r0: 3.0
-      pf_weight_decay_r1: 5.0
-      pf_weight_decay_r1: 5.0
+      pf_weight_decay_r0: 2.0
+      pf_weight_decay_r1: 6.0
       pf_weight_decay_gamma: 0.1
       
       pf_enable_orientation_gating: true
