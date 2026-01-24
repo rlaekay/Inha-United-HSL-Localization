@@ -90,6 +90,9 @@ void Locator::calcFieldMarkers(FieldDimensions fd) {
 }
 
 void Locator::setPFParams(int numParticles, double initMargin, bool ownHalf, double sensorNoise, std::vector<double> alphas, double alphaSlow, double alphaFast,
+                          double injectionRatio, double zeroMotionTransThresh, double zeroMotionRotThresh, bool resampleWhenStopped, double clusterDistThr,
+                          double clusterThetaThr, double smoothAlpha, double invObsVarX, double invObsVarY, double likelihoodWeight,
+                          double unmatchedPenaltyConfThr, double pfEssThreshold, double injectionDist, double injectionAngle, double clusterMinWeight,
                           int clusterMinSize, double hysteresisFactor, double clusterRatioLimit, double weightDecayR0, double weightDecayR1,
                           double weightDecayGamma, bool enableOrientationGating, double orientationGatingThr) {
   this->pfNumParticles = numParticles;
