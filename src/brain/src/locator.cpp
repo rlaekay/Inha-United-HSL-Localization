@@ -309,7 +309,7 @@ void Locator::init(FieldDimensions fd, int minMarkerCntParam, double residualTol
 
 void Locator::globalInitPF(Pose2D currentOdom) {
   double xMin = -fieldDimensions.length / 2.0 - pfInitFieldMargin;
-  double xMax = pfInitFieldMargin;
+  double xMax = 0;
   double yMin = fieldDimensions.width / 2.0 - pfInitFieldMargin;
   double yMax = fieldDimensions.width / 2.0 + pfInitFieldMargin;
   double thetaMin = -M_PI;
