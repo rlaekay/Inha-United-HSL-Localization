@@ -32,7 +32,7 @@ public:
     int id = -1;
   };
 
-  Pose2D lastOdomPose = {0, 0, 0};
+  Pose2D lastOdom = {0, 0, 0};
   Pose2D bestPose = {0, 0, 0};
   Pose2D pose = {0, 0, 0};
 
@@ -76,7 +76,7 @@ public:
   void logParticles(double);
   void setLog(rerun::RecordingStream *stream);
   void globalInit(Pose2D currentOdom);
-  void predict(Pose2D currentOdomPose);
+  void predict(Pose2D currentOdom);
   void correct(const vector<FieldMarker> markers);
   void clusterParticles();
   void setParams(int numParticles, double initMargin, std::vector<double> alphas, double smoothAlpha, double invObsVarX, double invObsVarY,

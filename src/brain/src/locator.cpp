@@ -116,13 +116,15 @@ void Locator::setParams(int numParticles, double initMargin, std::vector<double>
 }
 
 void Locator::globalInit(Pose2D currentOdom) {
+  prtWarn(format("[PF][globalInit] | initialized=%d | pfN=%zu | odom=(%.2f %.2f %.2f)", isInitialized, particles.size(), currentOdom.x,
+                 currentOdom.y, rad2deg(currentOdom.theta)));
   double xMin = -fieldDimensions.length / 2.0 - initFieldMargin;
   double xMax = 0;
   double yMin = fieldDimensions.width / 2.0 - initFieldMargin;
   double yMax = fieldDimensions.width / 2.0 + initFieldMargin;
 
   isInitialized = true;
-  lastOdomPose = currentOdom;
+  lastOdom = currentOdom;
 
   int num = numParticles;
   particles.resize(num);
@@ -144,26 +146,26 @@ void Locator::globalInit(Pose2D currentOdom) {
   }
 }
 
-void Locator::predict(Pose2D currentOdomPose) {
+void Locator::predict(Pose2D currentOdom) {
   if (!isInitialized) {
-    lastOdomPose = currentOdomPose;
+    lastOdom = currentOdom;
     // BT에 섞으면 selfLocateEnterField에서만 globalInit()
-    globalInit(currentOdomPose);
+    globalInit(currentOdom);
     return;
   }
 
-  double dx = currentOdomPose.x - lastOdomPose.x;
-  double dy = currentOdomPose.y - lastOdomPose.y;
-  double dtheta = toPInPI(currentOdomPose.theta - lastOdomPose.theta);
+  double dx = currentOdom.x - lastOdom.x;
+  double dy = currentOdom.y - lastOdom.y;
+  double dtheta = toPInPI(currentOdom.theta - lastOdom.theta);
 
   // 변화가 너--무 작으면 조기종료
   if (fabs(dx) < 0.0001 && fabs(dy) < 0.0001 && fabs(dtheta) < 0.0087) {
-    lastOdomPose = currentOdomPose;
+    lastOdom = currentOdom;
     return;
   }
 
-  double c = cos(lastOdomPose.theta);
-  double s = sin(lastOdomPose.theta);
+  double c = cos(lastOdom.theta);
+  double s = sin(lastOdom.theta);
 
   double trans_x = c * dx + s * dy; // 로봇좌표계로
   double trans_y = -s * dx + c * dy;
@@ -186,7 +188,7 @@ void Locator::predict(Pose2D currentOdomPose) {
     p.theta = toPInPI(p.theta + n_rot1 + n_rot2);
   }
 
-  lastOdomPose = currentOdomPose;
+  lastOdom = currentOdom;
 }
 
 void Locator::correct(const vector<FieldMarker> markers) {

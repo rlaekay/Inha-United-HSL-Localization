@@ -56,27 +56,27 @@ brain_node:
     locator:
       num_particles: 100
       init_field_margin: 0.5
-      alpha_1: 0.001 #rot -> rot
-      alpha_2: 0.001 #trans -> rot
-      alpha_3: 0.001 # trans-> trans
-      alpha_4: 0.001 #rot->trans
+      alpha_1: 0.0001 #rot -> rot
+      alpha_2: 0.0001 #trans -> rot
+      alpha_3: 0.0001 # trans-> trans
+      alpha_4: 0.0001 #rot->trans
       smooth_alpha: 0.8
-      inv_norm_var: 3.0
-      inv_perp_var: 4.0
-      likelihood_weight: 0.2
+      inv_norm_var: 0.1
+      inv_perp_var: 0.1
+      likelihood_weight: 1.0
       unmatched_penalty_conf_thr: 0.2
-      ess_threshold: 0.2
-      cluster_dist_thr: 0.2
-      cluster_theta_thr: 0.18
-      cluster_min_weight: 0.05
-      orientation_gating_thr: 2.0 # ~114 degrees
+      ess_threshold: 0.3
+      cluster_dist_thr: 0.5
+      cluster_theta_thr: 0.2
+      cluster_min_weight: 0.5
+      orientation_gating_thr: 1.0 # ~114 degrees
 
 
     enable_com: false 
 
     rerunLog:
       enable_tcp: true 
-      server_ip: "192.168.0.151:9876" 
+      server_ip: "192.168.0.32:9876" 
       enable_file: true 
       log_dir: "/home/booster/Workspace/rrlog"
       max_log_file_mins: 5.0 
