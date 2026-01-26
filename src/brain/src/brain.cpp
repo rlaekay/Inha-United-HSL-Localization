@@ -155,7 +155,7 @@ void Brain::init() {
 
   locator->init(config->fieldDimensions, config->rerunLogEnableTCP || config->rerunLogEnableFile);
 
-  locator->setParams(config->numParticles, config->initMargin, config->alpha1, config->alpha2, config->alpha3, config->alpha4, config->smoothAlpha,
+  locator->setParams(config->numParticles, config->initFieldMargin, config->alpha1, config->alpha2, config->alpha3, config->alpha4, config->smoothAlpha,
                      config->invNormVar, config->invPerpVar, config->likelihoodWeight, config->unmatchedPenaltyConfThr, config->essThreshold,
                      config->clusterDistThr, config->clusterThetaThr, config->clusterMinWeight, config->orientationGatingThr);
 
