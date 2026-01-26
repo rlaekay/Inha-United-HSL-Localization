@@ -231,8 +231,6 @@ void BrainConfig::print(ostream &os) {
   os << "    ballConfidenceThreshold = " << ballConfidenceThreshold << endl;
   os << "----------------------------------------" << endl;
   os << "Locator:" << endl;
-  os << "    pfMinMarkerCnt = " << pfMinMarkerCnt << endl;
-  os << "    pfMaxResidual = " << pfMaxResidual << endl;
   os << "----------------------------------------" << endl;
   os << "Communication:" << endl;
   os << "    enableCom = " << enableCom << endl;

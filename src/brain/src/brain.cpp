@@ -153,11 +153,11 @@ void Brain::init() {
   client = std::make_shared<RobotClient>(this);
   communication = std::make_shared<BrainCommunication>(this);
 
-  locator->init(config->fieldDimensions, config->rerunLogEnableTCP || config->rerunLogEnableFile);
+  locator->init(config->fieldDimensions, config->rerunLogEnableTCP || config->rerunLogEnableFile, config->rerunLogServerIP);
 
-  locator->setParams(config->numParticles, config->initFieldMargin, config->alpha1, config->alpha2, config->alpha3, config->alpha4, config->smoothAlpha,
-                     config->invNormVar, config->invPerpVar, config->likelihoodWeight, config->unmatchedPenaltyConfThr, config->essThreshold,
-                     config->clusterDistThr, config->clusterThetaThr, config->clusterMinWeight, config->orientationGatingThr);
+  locator->setParams(config->numParticles, config->initFieldMargin, {config->alpha1, config->alpha2, config->alpha3, config->alpha4},
+                     config->smoothAlpha, config->invNormVar, config->invPerpVar, config->likelihoodWeight, config->unmatchedPenaltyConfThr,
+                     config->essThreshold, config->clusterDistThr, config->clusterThetaThr, config->clusterMinWeight, config->orientationGatingThr);
 
   locator->setLog(&log->log_tcp);
 
