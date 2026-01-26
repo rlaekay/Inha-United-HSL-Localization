@@ -267,8 +267,8 @@ void Locator::correct(const vector<FieldMarker> markers) {
         double dn = ux * dx + uy * dy;
         double dp = -uy * dx + ux * dy;
 
-        double sigma_n = 0.2 * dist + 0.1; // 1m:0.3, 2m:0.5, 3m:0.7
-        double sigma_p = 0.1 * dist + 0.1;
+        double sigma_n = invNormVar * dist + 0.1; // 1m:0.3, 2m:0.5, 3m:0.7
+        double sigma_p = invPerpVar * dist + 0.1;
 
         double D2 = dn * dn / (sigma_n * sigma_n) + dp * dp / (sigma_p * sigma_p);
         return D2;
