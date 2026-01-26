@@ -136,7 +136,7 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("locator.cluster_dist_thr", 0.3);
   declare_parameter<double>("locator.cluster_theta_thr", 20.0);
   declare_parameter<double>("locator.cluster_min_weight", 0.3);
-  declare_parameter<double>("locator.orientation_gating_thr")
+  declare_parameter<double>("locator.orientation_gating_thr", 0.2);
 }
 
 Brain::~Brain() {}
