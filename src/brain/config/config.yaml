@@ -54,21 +54,21 @@ brain_node:
       chase_ao_safe_dist: 3.5 
 
     locator:
-      num_particles: 200
+      num_particles: 50
       init_field_margin: 0.5
-      alpha_1: 0.002 #rot -> rot
-      alpha_2: 0.002 #trans -> rot
+      alpha_1: 0.001 #rot -> rot
+      alpha_2: 0.008 #trans -> rot
       alpha_3: 0.01 # trans-> trans
       alpha_4: 0.002 #rot->trans
-      smooth_alpha: 0.7
-      inv_norm_var: 0.1
+      smooth_alpha: 1.0
+      inv_norm_var: 0.08
       inv_perp_var: 0.05
-      likelihood_weight: 0.2
+      likelihood_weight: 0.3
       unmatched_penalty_conf_thr: 0.2
       ess_threshold: 0.4
       cluster_dist_thr: 0.7
       cluster_theta_thr: 0.2
-      cluster_min_weight: 0.3
+      cluster_min_weight: 0.5
       orientation_gating_thr: 1.0 # ~114 degrees
 
 
