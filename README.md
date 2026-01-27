@@ -1,3 +1,21 @@
+# MARK-I
+
+| **Item** | **Description** | **Details** | **Notes** |
+|---|---|---|---|
+| **Filter** | Adaptive augmented SIR with random injection |  |  |
+| **Initialization** | At game start | `selfLocateEnterField()` → `globalInitPF()` |  |
+| **Prior** | Odometry-based prior<br>Thrun odometry model | `odometerCallback()` → `predictPF()` |  |
+| **Likelihood** | Aggregated marker-wise probabilities | `detectProcessMarkings()` → `correctPF()` |  |
+| **Resampling** | ESS-based resampling |  |  |
+| **Final pose estimation** | Mean pose of particles |  |  |
+| **Number of particles** | 150 |  |  |
+| **Current issues** | Likelihood becomes highly unstable when the number of observed markers is small (1–2) |  | Consider enforcing a minimum marker count |
+| **Future improvements** | - Measurement smoothing<br>- Enforce a minimum marker count, or<br>- Apply ILM, or<br>- Use Booster’s resampling algorithm<br>- Lower the ESS threshold |  |  |
+| **Open questions** | - Real-time fusion vs. fusion after measurement filtering (e.g., ILM)<br>- How to perform objective performance evaluation? |  |  |
+| **Parameters** | - Motion model<br>- Measurement model<br>- ESS ratio<br>- Injection rate<br>- `alpha_slow`, `alpha_fast`<br>- Number of particles<br>- Initialization bounds |  |  |
+
+-------------------------------
+
 # K1_Robocup Demo
 ## introduction
 The Booster K1 Robocup official demo allows the robot to make autonomous decisions to kick the ball and complete the full Robocup match. It includes three programs: vision, brain, and game_controller.
