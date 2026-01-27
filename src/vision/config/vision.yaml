@@ -53,7 +53,7 @@ segmentation_model:
   model_path: ./src/vision/model/best_seg_orin_10.3.engine
   confidence_threshold: 0.3
   nms_threshold: 0.9
-use_depth: true
+use_depth: false
 use_imu: true
 ball_pose_estimator:
   use_depth: false
@@ -82,4 +82,4 @@ calibration:
     calibration_time: 2000-01-01-09-29-08
     reprojection_error: 3.5616553263245252
 misc:
-  save_data_nonstationary: true
+  save_data_nonstationary: false

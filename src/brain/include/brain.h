@@ -216,13 +216,13 @@ private:
 
   void logVisionBox(const rclcpp::Time &timePoint);
 
-  void logDetection(const vector<GameObject> &gameObjects, bool logBoundingBox = true);
+  // void logDetection(const vector<GameObject> &gameObjects, bool logBoundingBox = true);
 
   void logMemRobots();
 
-  void logObstacles();
+  // void logObstacles();
 
-  void logDepth(int grid_x_count, int grid_y_count, vector<vector<int>> &grid, vector<rerun::Vec3D> &points);
+  // void logDepth(int grid_x_count, int grid_y_count, vector<vector<int>> &grid, vector<rerun::Vec3D> &points);
 
   void logDebugInfo();
 
