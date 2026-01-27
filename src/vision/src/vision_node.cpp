@@ -169,7 +169,7 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
     std::string log_root = std::string(std::getenv("HOME")) + "/Workspace/vision_log/" + getTimeString();
     data_logger_ = save_data_ ? std::make_shared<DataLogger>(log_root, save_data_nonstationary) : nullptr;
     data_logger_->LogYAML(node, "vision_local.yaml");
-    seg_data_syncer_ = std::make_shared<DataSyncer>(false);
+    // seg_data_syncer_ = std::make_shared<DataSyncer>(false);
 
     // init pose estimator
     pose_estimator_ = std::make_shared<PoseEstimator>(intr_);
