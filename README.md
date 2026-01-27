@@ -1,3 +1,31 @@
+# MARK-III
+| **항목** | **내용** | **상세** | 비고 |
+| --- | --- | --- | --- |
+| **필터** | adaptive SIR |  |  |
+| **init** | game 시작과 동시
++ 우리쪽 코트 바깥 & facing inward | selfLocateEnterField() → globalInitPF() |  |
+| **Prior** | **Velocity based stochastic Model** | odometerCallback() → predictPF() | rot→rot
+rot→trans
+trans→trans
+trans→rot |
+| **Likelihood** | **-LAP matching using hungarian algorithm
+-Cost calculation: suppressed joint likelihood of 2D gaussian (disadvantage propotional to the distance from the robot)** | detectrocessMarkings() → correctPF() | distance sd: 1.0 |
+| **Resampling** | ESS resampling with orientation constraint
+extremely low threshold due to very accurate measurement |  | < 0.3 N |
+| **Pose Extraction** | dbscan like clustering
+1. weight 정렬. top 80%만 사용
+2. sorted particle을 DB scan으로 클러스터 형성
+3. weight sum과 size로 cluster filter
+4. [지금까지 best vs updated best] cluster로 최종 클러스터 결정 |  |  |
+| **파티클 개수** | 150 |  |  |
+|  |  |  |  |
+| **Random injection** | very low due to symmetric map | done with resampling | 1% |
+| **outlier filtering** | 0 weight in correction step |  |  |
+| **파라미터** |  |  |  |
+| **당장 문제**  |  |  |  |
+|  |  |  |  |
+
+---------------------------------------------------------------------------------
 # K1_Robocup Demo
 ## introduction
 The Booster K1 Robocup official demo allows the robot to make autonomous decisions to kick the ball and complete the full Robocup match. It includes three programs: vision, brain, and game_controller.
