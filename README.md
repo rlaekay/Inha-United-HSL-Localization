@@ -1,3 +1,14 @@
+# MARK-IV
+## Updates
+- no random injections
+- angular gates enhanced
+
+## In Future
+- Initial pose estimation needs to be improved
+- Parallel computing to efficiently compute within scarce resources
+
+-----------------------------------------------------------------------------
+
 # K1_Robocup Demo
 ## introduction
 The Booster K1 Robocup official demo allows the robot to make autonomous decisions to kick the ball and complete the full Robocup match. It includes three programs: vision, brain, and game_controller.
