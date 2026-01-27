@@ -1,17 +1,19 @@
 # MARK-III
-| **항목** | **내용** | **상세** | **비고** |
+| **Item** | **Description** | **Details** | **Notes** |
 |---|---|---|---|
-| **필터** | adaptive SIR |  |  |
-| **init** | game 시작과 동시<br>우리쪽 코트 바깥 & facing inward | `selfLocateEnterField()` → `globalInitPF()` |  |
-| **Prior** | **Velocity-based stochastic model** | `odometerCallback()` → `predictPF()` | rot→rot<br>rot→trans<br>trans→trans<br>trans→rot |
-| **Likelihood** | **LAP matching (Hungarian algorithm)**<br>**Cost:** suppressed joint likelihood of 2D Gaussian<br>(penalty proportional to distance from robot) | `detectProcessMarkings()` → `correctPF()` | distance sd: 1.0 |
-| **Resampling** | ESS resampling with orientation constraint<br>very low threshold due to accurate measurement |  | \< 0.3 N |
-| **Pose Extraction** | DBSCAN-like clustering<br>1. weight 정렬 (top 80%)<br>2. DBSCAN으로 클러스터 형성<br>3. weight sum + size 기반 필터링<br>4. previous best vs updated best 비교로 최종 선택 |  |  |
-| **파티클 개수** | 150 |  |  |
-| **Random injection** | very low (symmetric map) | resampling 단계에서 수행 | 1% |
-| **Outlier filtering** | correction step에서 weight = 0 |  |  |
-| **파라미터** |  |  |  |
-| **당장 문제** |  |  |  |
+| **Filter** | Adaptive SIR |  |  |
+| **Initialization** | At game start<br>Outside own half, facing inward | `selfLocateEnterField()` → `globalInitPF()` |  |
+| **Prior** | **Velocity-based stochastic motion model** | `odometerCallback()` → `predictPF()` | rot→rot<br>rot→trans<br>trans→trans<br>trans→rot |
+| **Likelihood** | **LAP matching (Hungarian algorithm)**<br>**Cost:** suppressed joint likelihood of a 2D Gaussian<br>(penalty proportional to distance from the robot) | `detectProcessMarkings()` → `correctPF()` | distance sd: 1.0 |
+| **Resampling** | ESS-based resampling with orientation constraint<br>Extremely low threshold due to highly accurate measurements |  | \< 0.3 N |
+| **Pose Extraction** | DBSCAN-like clustering<br>1. Sort particles by weight (top 80%)<br>2. Form clusters using DBSCAN<br>3. Filter clusters by weight sum and size<br>4. Select final cluster by comparing previous best vs updated best |  |  |
+| **Number of particles** | 150 |  |  |
+| **Random injection** | Very low due to symmetric field | Applied during resampling | 1% |
+| **Outlier filtering** | Assign zero weight during correction step |  |  |
+| **Parameters** |  |  |  |
+| **Current issues** |  |  |  |
+
+
 
 ---------------------------------------------------------------------------------
 # K1_Robocup Demo
