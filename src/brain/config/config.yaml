@@ -63,9 +63,9 @@ brain_node:
       smooth_alpha: 1.0
       inv_norm_var: 0.08
       inv_perp_var: 0.05
-      likelihood_weight: 0.3
+      likelihood_weight: 0.8
       unmatched_penalty_conf_thr: 0.2
-      ess_threshold: 0.4
+      ess_threshold: 0.5
       cluster_dist_thr: 0.5
       cluster_theta_thr: 0.2
       cluster_min_weight: 0.5
