@@ -208,7 +208,7 @@ void BrainLog::logRobot(string logPath, Pose2D pose, u_int32_t color, string lab
         rerun::LineStrips2D(rerun::Collection<rerun::components::LineStrip2D>(lines))
         .with_radii(widths)
         .with_colors(color)
-        .with_labels({label})
+        // .with_labels({label})
     );
 }
 
