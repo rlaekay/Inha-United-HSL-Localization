@@ -216,7 +216,7 @@ private:
 
   void logVisionBox(const rclcpp::Time &timePoint);
 
-  // void logDetection(const vector<GameObject> &gameObjects, bool logBoundingBox = true);
+  void logDetection(const vector<GameObject> &gameObjects, bool logBoundingBox = true);
 
   void logMemRobots();
 
@@ -235,7 +235,7 @@ private:
   rclcpp::Subscription<booster_interface::msg::Odometer>::SharedPtr odometerSubscription;
   rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscription;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr imageSubscription;
-  rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depthImageSubscription;
+  // rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr depthImageSubscription;
   rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr headPoseSubscription;
   rclcpp::Subscription<booster_interface::msg::RawBytesMsg>::SharedPtr recoveryStateSubscription;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pubSoundPlay;

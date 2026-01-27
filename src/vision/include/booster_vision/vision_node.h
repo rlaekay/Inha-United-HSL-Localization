@@ -95,7 +95,7 @@ private:
     rclcpp::Publisher<vision_interface::msg::Ball>::SharedPtr ball_pub_;
 
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr detection_img_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr segmentation_img_pub_;
+    // rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr segmentation_img_pub_;
 
     rclcpp::Publisher<geometry_msgs::msg::TransformStamped>::SharedPtr pose_tf_pub_;
     rclcpp::Subscription<geometry_msgs::msg::TransformStamped>::SharedPtr pose_tf_sub_;
@@ -106,12 +106,12 @@ private:
     std::shared_ptr<image_transport::ImageTransport> it_;
     image_transport::Subscriber color_sub_;
     image_transport::Subscriber depth_sub_;
-    image_transport::Subscriber color_seg_sub_;
+    // image_transport::Subscriber color_seg_sub_;
     rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr pose_sub_;
     rclcpp::Subscription<vision_interface::msg::CalParam>::SharedPtr calParam_sub_; // Sub for calibration params
 
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_1_;
-    rclcpp::CallbackGroup::SharedPtr callback_group_sub_2_;
+    // rclcpp::CallbackGroup::SharedPtr callback_group_sub_2_;
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_3_;
     rclcpp::CallbackGroup::SharedPtr callback_group_sub_4_;
     // 승재욱 추가
@@ -121,9 +121,9 @@ private:
 
     std::shared_ptr<DataLogger> data_logger_;
     std::shared_ptr<DataSyncer> data_syncer_;
-    std::shared_ptr<DataSyncer> seg_data_syncer_;
+    // std::shared_ptr<DataSyncer> seg_data_syncer_;
     std::shared_ptr<YoloV8Detector> detector_;
-    std::shared_ptr<YoloV8Segmentor> segmentor_;
+    // std::shared_ptr<YoloV8Segmentor> segmentor_;
     std::shared_ptr<PoseEstimator> pose_estimator_;
     std::map<std::string, std::shared_ptr<PoseEstimator>> pose_estimator_map_;
 

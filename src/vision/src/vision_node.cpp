@@ -153,11 +153,11 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
         }
     }
 
-    if (!node["segmentation_model"]) {
-        std::cerr << "no segmentation model param found" << std::endl;
-    } else {
-        segmentor_ = YoloV8Segmentor::CreateYoloV8Segmentor(node["segmentation_model"], segmentation_model_path);
-    }
+    // if (!node["segmentation_model"]) {
+    //     std::cerr << "no segmentation model param found" << std::endl;
+    // } else {
+    //     segmentor_ = YoloV8Segmentor::CreateYoloV8Segmentor(node["segmentation_model"], segmentation_model_path);
+    // }
 
     // add detector_ warmup
 
@@ -215,7 +215,7 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
     // ROS2 executor에서 콜백을 병렬로 돌릴 때 같은 그룹 내에서는 동시에 실행 안 됨 / 그룹이 다르면 병렬 가능
     // ColorCallback / SegmentationCallback / DepthCallback / PoseCallback 등을 서로 간섭 줄이면서 돌리려는 설계
     callback_group_sub_1_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
-    callback_group_sub_2_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    // callback_group_sub_2_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     callback_group_sub_3_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     callback_group_sub_4_ = this->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     // 승재욱 추가
@@ -223,8 +223,8 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
 
     auto sub_opt_1 = rclcpp::SubscriptionOptions(); // color for detect
     sub_opt_1.callback_group = callback_group_sub_1_;
-    auto sub_opt_2 = rclcpp::SubscriptionOptions(); // color for seg
-    sub_opt_2.callback_group = callback_group_sub_2_;
+    // auto sub_opt_2 = rclcpp::SubscriptionOptions(); // color for seg
+    // sub_opt_2.callback_group = callback_group_sub_2_;
     auto sub_opt_3 = rclcpp::SubscriptionOptions(); // depth
     sub_opt_3.callback_group = callback_group_sub_3_;
     auto sub_opt_4 = rclcpp::SubscriptionOptions(); // head_pose
@@ -258,15 +258,15 @@ void VisionNode::Init(const std::string &cfg_template_path, const std::string &c
 
     detection_pub_ = this->create_publisher<vision_interface::msg::Detections>("/booster_vision/detection", rclcpp::QoS(1));
 
-    if (node["segmentation_model"]) {
-        std::cout << "create sub for segmentor" << std::endl;
-        if (camera_type_.find("compressed") != std::string::npos) {
-            color_seg_sub_ = it_->subscribe(color_topic, 1, &VisionNode::SegmentationCallback, this, &hints, sub_opt_2);
-        } else {
-            color_seg_sub_ = it_->subscribe(color_topic, 1, &VisionNode::SegmentationCallback, this, nullptr, sub_opt_2);
-        }
-        field_line_pub_ = this->create_publisher<vision_interface::msg::LineSegments>("/booster_vision/line_segments", rclcpp::QoS(1));
-    }
+    // if (node["segmentation_model"]) {
+    //     std::cout << "create sub for segmentor" << std::endl;
+    //     if (camera_type_.find("compressed") != std::string::npos) {
+    //         color_seg_sub_ = it_->subscribe(color_topic, 1, &VisionNode::SegmentationCallback, this, &hints, sub_opt_2);
+    //     } else {
+    //         color_seg_sub_ = it_->subscribe(color_topic, 1, &VisionNode::SegmentationCallback, this, nullptr, sub_opt_2);
+    //     }
+    //     field_line_pub_ = this->create_publisher<vision_interface::msg::LineSegments>("/booster_vision/line_segments", rclcpp::QoS(1));
+    // }
     ball_pub_ = this->create_publisher<vision_interface::msg::Ball>("/booster_vision/ball", rclcpp::QoS(1));
 
     if (offline_mode_) {
@@ -540,83 +540,83 @@ void VisionNode::ColorCallback(const sensor_msgs::msg::Image::ConstSharedPtr &ms
               << "ms" << std::endl;
 }
 
-void VisionNode::ProcessSegmentationData(SyncedDataBlock &synced_data, vision_interface::msg::LineSegments &field_line_segs_msg) {
-    double timestamp = synced_data.color_data.timestamp;
-    cv::Mat color = synced_data.color_data.data;
-    Pose p_head2base = synced_data.pose_data.data;
-    Pose p_eye2base = p_head2base * p_headprime2head_ * p_eye2head_;
+// void VisionNode::ProcessSegmentationData(SyncedDataBlock &synced_data, vision_interface::msg::LineSegments &field_line_segs_msg) {
+//     double timestamp = synced_data.color_data.timestamp;
+//     cv::Mat color = synced_data.color_data.data;
+//     Pose p_head2base = synced_data.pose_data.data;
+//     Pose p_eye2base = p_head2base * p_headprime2head_ * p_eye2head_;
 
-    double time_diff = (timestamp - synced_data.pose_data.timestamp) * 1000;
-    if (time_diff > 40) {
-        std::cerr << "seg: color pose time diff: " << time_diff << " ms" << std::endl;
-    }
-    std::cout << "seg: p_eye2base: \n"
-              << p_eye2base.toCVMat() << std::endl;
+//     double time_diff = (timestamp - synced_data.pose_data.timestamp) * 1000;
+//     if (time_diff > 40) {
+//         std::cerr << "seg: color pose time diff: " << time_diff << " ms" << std::endl;
+//     }
+//     std::cout << "seg: p_eye2base: \n"
+//               << p_eye2base.toCVMat() << std::endl;
 
-    // inference
-    auto segmentations = segmentor_->Inference(color);
-    std::vector<FieldLineSegment> field_line_segs;
-    for (auto &seg : segmentations) {
-        // TODO: fit circle line
-        if (seg.class_id == 0) continue;
-        auto line_segs = FitFieldLineSegments(p_eye2base, intr_, seg.contour, line_segment_area_threshold_); // seg.contour : 마스크 외곽선(2D 픽셀 점들의 집합)
-        for (auto line_seg : line_segs) {
-            float inlier_precentage = static_cast<float>(line_seg.inlier_count) / line_seg.contour_2d_points.size();
-            if (inlier_precentage < 0.25) {
-                continue;
-            }
-            field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[0].x);
-            field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[0].y);
-            field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[1].x);
-            field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[1].y);
+//     // inference
+//     auto segmentations = segmentor_->Inference(color);
+//     std::vector<FieldLineSegment> field_line_segs;
+//     for (auto &seg : segmentations) {
+//         // TODO: fit circle line
+//         if (seg.class_id == 0) continue;
+//         auto line_segs = FitFieldLineSegments(p_eye2base, intr_, seg.contour, line_segment_area_threshold_); // seg.contour : 마스크 외곽선(2D 픽셀 점들의 집합)
+//         for (auto line_seg : line_segs) {
+//             float inlier_precentage = static_cast<float>(line_seg.inlier_count) / line_seg.contour_2d_points.size();
+//             if (inlier_precentage < 0.25) {
+//                 continue;
+//             }
+//             field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[0].x);
+//             field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[0].y);
+//             field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[1].x);
+//             field_line_segs_msg.coordinates.push_back(line_seg.end_points_3d[1].y);
 
-            field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[0].x);
-            field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[0].y);
-            field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[1].x);
-            field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[1].y);
+//             field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[0].x);
+//             field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[0].y);
+//             field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[1].x);
+//             field_line_segs_msg.coordinates_uv.push_back(line_seg.end_points_2d[1].y);
 
-            field_line_segs.push_back(line_seg);
-        }
-    }
-    std::cout << segmentations.size() << " objects segmented." << std::endl;
+//             field_line_segs.push_back(line_seg);
+//         }
+//     }
+//     std::cout << segmentations.size() << " objects segmented." << std::endl;
 
-    field_line_pub_->publish(field_line_segs_msg);
+//     field_line_pub_->publish(field_line_segs_msg);
 
-    if (show_seg_) {
-        cv::Mat img_out = YoloV8Segmentor::DrawSegmentation(color, segmentations);
-        img_out = DrawFieldLineSegments(img_out, field_line_segs);
-        cv::imshow("Segmentation", img_out);
-        cv::waitKey(1);
-    }
-}
+//     if (show_seg_) {
+//         cv::Mat img_out = YoloV8Segmentor::DrawSegmentation(color, segmentations);
+//         img_out = DrawFieldLineSegments(img_out, field_line_segs);
+//         cv::imshow("Segmentation", img_out);
+//         cv::waitKey(1);
+//     }
+// }
 
-void VisionNode::SegmentationCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
-    if (!segmentor_) {
-        std::cerr << "no segmentor loaded." << std::endl;
-        return;
-    }
-    std::cout << "new color for seg received" << std::endl;
-    if (!msg) {
-        std::cerr << "empty image message." << std::endl;
-        return;
-    }
+// void VisionNode::SegmentationCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
+//     if (!segmentor_) {
+//         std::cerr << "no segmentor loaded." << std::endl;
+//         return;
+//     }
+//     std::cout << "new color for seg received" << std::endl;
+//     if (!msg) {
+//         std::cerr << "empty image message." << std::endl;
+//         return;
+//     }
 
-    cv::Mat img;
-    try {
-        img = toCVMat(*msg).clone();
-    } catch (std::exception &e) {
-        std::cerr << "cv_bridge exception: " << e.what() << std::endl;
-        return;
-    }
+//     cv::Mat img;
+//     try {
+//         img = toCVMat(*msg).clone();
+//     } catch (std::exception &e) {
+//         std::cerr << "cv_bridge exception: " << e.what() << std::endl;
+//         return;
+//     }
 
-    vision_interface::msg::LineSegments field_line_segs_msg;
-    field_line_segs_msg.header = msg->header;
-    double timestamp = msg->header.stamp.sec + static_cast<double>(msg->header.stamp.nanosec) * 1e-9;
+//     vision_interface::msg::LineSegments field_line_segs_msg;
+//     field_line_segs_msg.header = msg->header;
+//     double timestamp = msg->header.stamp.sec + static_cast<double>(msg->header.stamp.nanosec) * 1e-9;
 
-    // get synced data
-    SyncedDataBlock synced_data = seg_data_syncer_->getSyncedDataBlock(ColorDataBlock(img, timestamp));
-    ProcessSegmentationData(synced_data, field_line_segs_msg);
-}
+//     // get synced data
+//     SyncedDataBlock synced_data = seg_data_syncer_->getSyncedDataBlock(ColorDataBlock(img, timestamp));
+//     ProcessSegmentationData(synced_data, field_line_segs_msg);
+// }
 
 void VisionNode::DepthCallback(const sensor_msgs::msg::Image::ConstSharedPtr &msg) {
     std::cout << "new depth received" << std::endl;
@@ -650,7 +650,7 @@ void VisionNode::DepthCallback(const sensor_msgs::msg::Image::ConstSharedPtr &ms
 void VisionNode::PoseTFCallBack(const geometry_msgs::msg::TransformStamped::SharedPtr msg) {
     double timestamp = msg->header.stamp.sec + static_cast<double>(msg->header.stamp.nanosec) * 1e-9;
     data_syncer_->AddPose(PoseDataBlock(Pose(*msg), timestamp));
-    seg_data_syncer_->AddPose(PoseDataBlock(Pose(*msg), timestamp));
+    // seg_data_syncer_->AddPose(PoseDataBlock(Pose(*msg), timestamp));
 }
 
 void VisionNode::PoseCallBack(const geometry_msgs::msg::Pose::SharedPtr msg) {
@@ -666,7 +666,7 @@ void VisionNode::PoseCallBack(const geometry_msgs::msg::Pose::SharedPtr msg) {
     float qw = msg->orientation.w;
     auto pose = Pose(x, y, z, qx, qy, qz, qw);
     data_syncer_->AddPose(PoseDataBlock(pose, timestamp));
-    seg_data_syncer_->AddPose(PoseDataBlock(pose, timestamp));
+    // seg_data_syncer_->AddPose(PoseDataBlock(pose, timestamp));
 
     if (!offline_mode_) {
         auto tf_msg = pose.toRosTFMsg();
