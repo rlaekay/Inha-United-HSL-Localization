@@ -1,4 +1,11 @@
 # MARK-IV
+## Updates
+- no random injections
+- angular gates enhanced
+
+## In Future
+- Initial pose estimation needs to be improved
+- Parallel computing to efficiently compute within scarce resources
 | **Item** | **Description** | **Details (Code-level)** | **Notes** |
 |---|---|---|---|
 | **Filter** | Adaptive SIR particle filter | Explicit ESS-based resampling + clustering-based pose extraction | No explicit augmented PF state |
@@ -26,13 +33,7 @@
 | **Current strengths** | Strong robustness to symmetry & noise | Distance-aware likelihood + pose-referenced clustering | Designed for RoboCup field |
 | **Known limitations** | No explicit random recovery | Global recovery relies on re-init only | Could stall in rare failures |
 | **Key parameters** | Motion, measurement, clustering, ESS | `α1–α4`, `invNormVar`, `invPerpVar`, `essThreshold`, cluster gates | YAML-configurable |
-## Updates
-- no random injections
-- angular gates enhanced
 
-## In Future
-- Initial pose estimation needs to be improved
-- Parallel computing to efficiently compute within scarce resources
 
 -----------------------------------------------------------------------------
 
