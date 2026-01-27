@@ -6,7 +6,6 @@
 | **Initial particle distribution** | Half-field biased initialization | Particles uniformly sampled in own half<br>Two symmetric orientation modes (±90° ± 30°) | Handles initial heading ambiguity |
 | **Number of particles** | 150 | `numParticles` | Configurable |
 | **Prior (Motion model)** | Thrun odometry model | `predict()`<br>Velocity-based decomposition: rot1–trans–rot2 | State-dependent noise |
-|  |  | Noise parameters:<br>`α1, α2, α3, α4` | rot↔trans coupling |
 | **Zero-motion gate** | Skip prediction if motion is negligible | Early return if<br>`dx, dy < 1e-4` and `dθ < 0.5°` | Prevents particle diffusion |
 | **Measurement model** | Marker-based observation model | Observed markers transformed to field frame per particle | SE(2) transform |
 | **Data association** | LAP matching (Hungarian algorithm) | Cost matrix = squared Euclidean distance (type-gated) | One-to-one assignment |
