@@ -39,7 +39,17 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ament_export_dependencies(rosidl_default_runtime)
 
 # source files
-file(GLOB SOURCE_FILES src/*.cpp)
+set(SOURCE_FILES
+  src/brain.cpp
+  src/brain_communication.cpp
+  src/brain_config.cpp
+  src/brain_data.cpp
+  src/brain_log.cpp
+  src/brain_tree.cpp
+  src/locator.cpp
+  src/main.cpp
+  src/robot_client.cpp
+)
 add_executable(brain_node ${SOURCE_FILES})
 
 # otherwise connot find msg in same pkg 
