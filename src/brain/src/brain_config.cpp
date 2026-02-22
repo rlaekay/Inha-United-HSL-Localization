@@ -36,7 +36,6 @@ void BrainConfig::calcMapLines() {
   rightTouchLine.dir = LineDir::Vertical;
   rightTouchLine.type = LineType::TouchLine;
 
-
   mapLines.push_back(rightTouchLine);
 
   FieldLine middleLine;
@@ -229,6 +228,18 @@ void BrainConfig::print(ostream &os) {
   os << "----------------------------------------" << endl;
   os << "Strategy:" << endl;
   os << "    ballConfidenceThreshold = " << ballConfidenceThreshold << endl;
+  os << "----------------------------------------" << endl;
+  os << "Local Planner (DWA):" << endl;
+  os << "    maxVelX = " << dwaMaxVelX << endl;
+  os << "    minVelX = " << dwaMinVelX << endl;
+  os << "    maxVelTheta = " << dwaMaxVelTheta << endl;
+  os << "    accLimX = " << dwaAccLimX << endl;
+  os << "    accLimTheta = " << dwaAccLimTheta << endl;
+  os << "    accLimY = " << dwaAccLimY << endl;
+  os << "    wGoal = " << dwaWGoal << endl;
+  os << "    wAlign = " << dwaWAlign << endl;
+  os << "    wObs = " << dwaWObs << endl;
+  os << "    safeDist = " << dwaSafeDist << endl;
   os << "----------------------------------------" << endl;
   os << "Locator:" << endl;
   os << "----------------------------------------" << endl;

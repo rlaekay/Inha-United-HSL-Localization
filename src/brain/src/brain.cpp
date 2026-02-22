@@ -4,6 +4,7 @@
 #include <yaml-cpp/yaml.h> // 添加这一行
 
 #include "brain.h"
+#include "brain/world_model.h"
 #include "utils/math.h"
 #include "utils/misc.h"
 #include "utils/print.h"
@@ -94,6 +95,17 @@ Brain::Brain() : rclcpp::Node("brain_node") {
   declare_parameter<double>("obstacle_avoidance.kick_ao_safe_dist", 1.0);
   declare_parameter<bool>("obstacle_avoidance.kick_ao_use_shoot", false);
 
+  declare_parameter<double>("local_planner.max_vel_x", 0.5);
+  declare_parameter<double>("local_planner.min_vel_x", -0.2);
+  declare_parameter<double>("local_planner.max_vel_theta", 2.0);
+  declare_parameter<double>("local_planner.acc_lim_x", 2.0);
+  declare_parameter<double>("local_planner.acc_lim_theta", 3.0);
+  declare_parameter<double>("local_planner.acc_lim_y", 1.0);
+  declare_parameter<double>("local_planner.w_goal", 1.0);
+  declare_parameter<double>("local_planner.w_align", 0.8);
+  declare_parameter<double>("local_planner.w_obs", 2.0);
+  declare_parameter<double>("local_planner.safe_dist", 0.5);
+
   declare_parameter<bool>("enable_com", false);
 
   declare_parameter<bool>("rerunLog.enable_tcp", false);
@@ -153,6 +165,10 @@ void Brain::init() {
   client = std::make_shared<RobotClient>(this);
   communication = std::make_shared<BrainCommunication>(this);
 
+  // [NEW] Initialize World Model & Local Planner
+  world_model = std::make_shared<WorldModel>();
+  local_planner = std::make_shared<LocalPlanner>(world_model);
+
   locator->init(config->fieldDimensions, config->rerunLogEnableTCP || config->rerunLogEnableFile, config->rerunLogServerIP);
 
   locator->setParams(config->numParticles, config->initFieldMargin, {config->alpha1, config->alpha2, config->alpha3, config->alpha4}, config->smoothAlpha,
@@ -164,6 +180,10 @@ void Brain::init() {
   tree->init();
 
   client->init();
+
+  // Start Planner Loop
+  local_planner->updateParams(*config);
+  local_planner->start();
 
   log->prepare();
 
@@ -231,6 +251,17 @@ void Brain::loadConfig() {
   get_parameter("obstacle_avoidance.safe_distance", config->safeDistance);
   get_parameter("obstacle_avoidance.avoid_secs", config->avoidSecs);
 
+  get_parameter("local_planner.max_vel_x", config->dwaMaxVelX);
+  get_parameter("local_planner.min_vel_x", config->dwaMinVelX);
+  get_parameter("local_planner.max_vel_theta", config->dwaMaxVelTheta);
+  get_parameter("local_planner.acc_lim_x", config->dwaAccLimX);
+  get_parameter("local_planner.acc_lim_theta", config->dwaAccLimTheta);
+  get_parameter("local_planner.acc_lim_y", config->dwaAccLimY);
+  get_parameter("local_planner.w_goal", config->dwaWGoal);
+  get_parameter("local_planner.w_align", config->dwaWAlign);
+  get_parameter("local_planner.w_obs", config->dwaWObs);
+  get_parameter("local_planner.safe_dist", config->dwaSafeDist);
+
   get_parameter("enable_com", config->enableCom);
 
   // get_parameter("rerunLog.enable", config->rerunLogEnable);
@@ -253,6 +284,8 @@ void Brain::loadConfig() {
   get_parameter("vision.cam_fov_y", camDegY);
   config->camAngleX = deg2rad(camDegX);
   config->camAngleY = deg2rad(camDegY);
+
+  if (local_planner) { local_planner->updateParams(*config); }
 
   // 从视觉 config 中加载相关参数
   string visionConfigPath, visionConfigLocalPath;
@@ -321,10 +354,30 @@ void Brain::tick() {
   logLags();
   statusReport();
   logStatusToConsole();
+
+  // Update World Model from external inputs (which have updated Tracker buffers via callbacks, theoretically)
+  // For now, assume callbacks push data to trackers directly or we bridge them here.
+  // world_model->update(now_seconds);
+
   playSoundForFun();
   updateLogFile();
 
   updateMemory();
+
+  if (world_model) { world_model->setRobotPose(data->robotPoseToField); }
+
+  // [NEW] Connect LocalPlanner output to RobotClient
+  // Only override if Planner is ACTIVE (not IDLE/STOP) to allow legacy behavior tree control otherwise
+  if (local_planner) {
+    auto mode = local_planner->getMode();
+    if (mode != ControlMode::IDLE && mode != ControlMode::STOP) {
+      auto vel = local_planner->getVelocityCommand();
+      // Apply velocity limits from config if needed, or rely on Planner to handle it.
+      // Planner already caps at MAX_V.
+      client->setVelocity(vel.v_x, vel.v_y, vel.v_theta);
+    }
+  }
+
   handleSpecialStates();
   handleCooperation();
 
@@ -594,6 +647,22 @@ void Brain::updateObstacleMemory() {
   }
 
   data->setObstacles(obs_new);
+
+  // [NEW] Feed obstacles to WorldModel for LocalPlanner
+  if (world_model) {
+    std::vector<ObstacleObservation> observations;
+    for (const auto &obs : obs_new) {
+      ObstacleObservation observation;
+      observation.x = obs.posToRobot.x;
+      observation.y = obs.posToRobot.y;
+      // Assign a confidence if available, or default
+      observation.confidence = 1.0;
+      observations.push_back(observation);
+    }
+    // Use current time for update
+    double now_sec = get_clock()->now().seconds();
+    world_model->getObstacleTracker().update(observations, now_sec);
+  }
   // logObstacles();
 }
 
@@ -1482,6 +1551,34 @@ void Brain::odometerCallback(const booster_interface::msg::Odometer &msg) {
   else if (!data->tmImLead)
     color = 0x00CC00FF;
   log->logRobot("field/robot", data->robotPoseToField, color, "", true);
+
+  // [NEW] Calculate Linear Velocity
+  // Differentiate odom position (in odom frame) and transform to robot frame
+  auto now = this->get_clock()->now();
+  if (data->lastOdomTime.nanoseconds() > 0) {
+    double dt = (now - data->lastOdomTime).seconds();
+    if (dt > 0.001) {
+      double vx_odom = (data->robotPoseToOdom.x - data->lastOdomPosX) / dt;
+      double vy_odom = (data->robotPoseToOdom.y - data->lastOdomPosY) / dt;
+      double vtheta_odom = (data->robotPoseToOdom.theta - data->lastOdomTheta) / dt;
+
+      // Transform vector from Odom Frame to Robot Frame
+      // Rotation matrix R = [cos(theta), -sin(theta); sin(theta), cos(theta)]
+      // v_robot = R^T * v_odom
+      // R^T = [cos(theta), sin(theta); -sin(theta), cos(theta)]
+      double theta = data->robotPoseToOdom.theta;
+      data->robotVelocity.v_x = cos(theta) * vx_odom + sin(theta) * vy_odom;
+      data->robotVelocity.v_y = -sin(theta) * vx_odom + cos(theta) * vy_odom;
+      data->robotVelocity.v_theta = vtheta_odom;
+    }
+  }
+  data->lastOdomTime = now;
+  data->lastOdomPosX = data->robotPoseToOdom.x;
+  data->lastOdomPosY = data->robotPoseToOdom.y;
+  data->lastOdomTheta = data->robotPoseToOdom.theta;
+
+  // [NEW] Update WorldModel
+  if (world_model) { world_model->setRobotVelocity(data->robotVelocity); }
 }
 
 void Brain::lowStateCallback(const booster_interface::msg::LowState &msg) {
@@ -2035,42 +2132,53 @@ void Brain::detectProcessGoalposts(const vector<GameObject> &goalpostObjs) {
 }
 
 void Brain::detectProcessRobots(const vector<GameObject> &robotObjs) {
-  // auto robots = data->getRobots();
+  // [NEW] Feed Vision Data to Obstacle Tracker
+  vector<ObstacleObservation> observations;
+  double now = this->now().seconds();
 
-  // for (int i = 0; i < robotObjs.size(); i++) {
-  //     auto rbt = robotObjs[i];
-  //     if (rbt.confidence < 50) continue;
-
-  //     // find nearest robot in memory
-  //     double minDist = 1e6;
-  //     int minIndex = -1;
-  //     for (int j = 0; j < robots.size(); j++) {
-  //         auto rm = robots[j];
-  //         double dist = norm(rm.posToField.x - rbt.posToField.x, rm.posToField.y - rbt.posToField.y);
-  //         if (dist < minDist) {
-  //             minDist = dist;
-  //             minIndex = j;
-  //         }
-  //     }
-  //     // prtDebug(format("minDist = %.2f", minDist));
-  //     if (minDist < 0.5) { // 认为是同一个机器人
-  //         robots[minIndex] = rbt;
-  //     } else { // 认为是不同的机器人
-  //         robots.push_back(rbt);
-  //     }
-  // }
-  // // 注意这里不清理已经看不见的机器人, 而是在 updateMemory 中进行处理.
-
-  vector<GameObject> robots = {};
-  for (int i = 0; i < robotObjs.size(); i++) {
-    auto rbt = robotObjs[i];
+  for (const auto &rbt : robotObjs) {
     if (rbt.confidence < 50) continue;
 
-    // else
-    robots.push_back(rbt);
+    ObstacleObservation obs;
+    obs.id = -1; // Unknown ID for now
+    obs.x = rbt.posToField.x;
+    obs.y = rbt.posToField.y;
+    obs.confidence = rbt.confidence;
+    obs.timestamp = now;
+    observations.push_back(obs);
   }
 
-  data->setRobots(robots);
+  // Correction Step
+  if (world_model) {
+    // Predict first (optional here if we trust the loop rate, but good practice)
+    // world_model->getObstacleTracker().predict(dt);
+    // For now, let's just Update.
+    world_model->getObstacleTracker().update(observations, now);
+  }
+
+  // Legacy Support: Update BrainData for existing modules that rely on it
+  // We can fetch back the tracked results from WorldModel if we want "Stable" results in BrainData
+  // Or we can keep the raw detections in BrainData if that's what was expected.
+  // The original code filtered and smoothed slightly.
+  // Let's populate BrainData with the *TRACKED* results to benefit from the filter.
+
+  if (world_model) {
+    vector<GameObject> stable_robots;
+    const auto &tracked = world_model->getTrackedObstacles();
+    for (const auto &t : tracked) {
+      GameObject obj;
+      obj.posToField.x = t.position.x();
+      obj.posToField.y = t.position.y();
+      // obj.velocity.x = t.velocity.x(); // GameObject might not have velocity field yet
+      obj.confidence = t.confidence;
+      obj.label = "Opponent"; // Default for now
+      stable_robots.push_back(obj);
+    }
+    data->setRobots(stable_robots);
+  } else {
+    // Fallback if world_model not initialized
+    data->setRobots(robotObjs);
+  }
 }
 
 void Brain::detectProcessVisionBox(const vision_interface::msg::Detections &msg) {

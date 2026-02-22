@@ -32,6 +32,8 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "brain/local_planner.h"
+#include "brain/world_model.h"
 #include "brain_communication.h"
 #include "brain_config.h"
 #include "brain_data.h"
@@ -65,6 +67,11 @@ public:
   std::shared_ptr<RobotClient> client;
   // locator 对象
   std::shared_ptr<Locator> locator;
+
+  // [NEW] World Model & Local Planner
+  std::shared_ptr<WorldModel> world_model;
+  std::shared_ptr<LocalPlanner> local_planner;
+
   // BrainTree 对象，里面包含 BehaviorTree 相关的操作
   std::shared_ptr<BrainTree> tree;
   // Communication 对象，里面包含通信相关的操作，主要是双机通信和裁判机通信
@@ -165,6 +172,14 @@ public:
    * @return double, 碰撞距离
    */
   double distToObstacle(double angle);
+
+  // [NEW] Planner Interface for BT
+  void setMotionCommand(ControlMode mode, PlannerTarget target) {
+    if (local_planner) local_planner->setCommand(mode, target);
+  }
+
+  std::shared_ptr<LocalPlanner> getLocalPlanner() { return local_planner; }
+  std::shared_ptr<WorldModel> getWorldModel() { return world_model; }
 
   vector<double> findSafeDirections(double startAngle, double safeDist, double step = deg2rad(10));
 

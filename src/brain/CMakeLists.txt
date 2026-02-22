@@ -49,6 +49,9 @@ set(SOURCE_FILES
   src/locator.cpp
   src/main.cpp
   src/robot_client.cpp
+  src/world_model.cpp
+  src/obstacle_tracker.cpp
+  src/local_planner.cpp
 )
 add_executable(brain_node ${SOURCE_FILES})
 

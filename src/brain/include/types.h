@@ -38,6 +38,13 @@ struct Pose2D {
   double y = 0;
   double theta = 0; // rad, 从 x 轴正方向开始, 逆时针为正
 };
+using RobotPose = Pose2D;
+
+struct Velocity {
+  double v_x = 0;
+  double v_y = 0;
+  double v_theta = 0;
+};
 
 // 定位范围约束条件
 struct PoseBox2D {

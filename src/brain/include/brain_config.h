@@ -100,6 +100,18 @@ public:
   double smoothAlpha = 0.4;
   double essThreshold = 0.4;
 
+  // DWA Parameters
+  double dwaMaxVelX = 0.5;
+  double dwaMinVelX = -0.2;
+  double dwaMaxVelTheta = 2.0;
+  double dwaAccLimX = 2.0;
+  double dwaAccLimTheta = 3.0;
+  double dwaAccLimY = 1.0;
+  double dwaWGoal = 1.0;
+  double dwaWAlign = 0.8;
+  double dwaWObs = 2.0;
+  double dwaSafeDist = 0.5;
+
   bool soundEnable = false;
   string soundPack = "espeak";
 
